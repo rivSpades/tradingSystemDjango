@@ -21,5 +21,5 @@ from symbols import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('symbols.urls')),  # Use path
+    path('symbols/', include('symbols.urls')),  # Use path
 ]
