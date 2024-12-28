@@ -1,6 +1,7 @@
 from django.urls import path
-from . import views
+from .views import SymbolListView, SymbolDetailView
 
 urlpatterns = [
-    path('', views.symbols, name='symbols'),  # Example URL pattern for the index view
+    path('', SymbolListView.as_view(), name='symbols'),  # Example URL pattern for the index view
+    path('<str:ticker>/', SymbolDetailView.as_view(), name='symbol_detail'),
 ]

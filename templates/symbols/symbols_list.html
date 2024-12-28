@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Top Trending Strategy Section -->
+    <div class="trending-strategies">
+        <div class="strategy-card">
+            <div class="strategy-info">
+                <h3>Meta Platforms</h3>
+                <span>Reward Rate: 48.23%</span>
+                <span>2.25%</span>
+            </div>
+            <div class="chart">
+                <!-- Chart SVG or Canvas Placeholder -->
+            </div>
+        </div>
+        <div class="strategy-card">
+            <div class="strategy-info">
+                <h3>Tesla, Inc</h3>
+                <span>Reward Rate: 48.23%</span>
+                <span>2.25%</span>
+            </div>
+            <div class="chart">
+                <!-- Chart SVG or Canvas Placeholder -->
+            </div>
+        </div>
+        <div class="strategy-card">
+            <div class="strategy-info">
+                <h3>NVIDIA Corporation</h3>
+                <span>Reward Rate: 48.23%</span>
+                <span>2.25%</span>
+            </div>
+            <div class="chart">
+                <!-- Chart SVG or Canvas Placeholder -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Market Data Table -->
+    <table class="market-data">
+        <thead>
+            <tr>
+                <th>Company Name</th>
+                <th>High</th>
+                <th>Low</th>
+                <th>Prev Close</th>
+                <th>Change</th>
+                <th>Gain</th>
+                <th>5 Day Performance</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Sample Rows -->
+            <tr>
+                <td>Microsoft Corporation Common Stock</td>
+                <td>$490.82</td>
+                <td>$385.25</td>
+                <td>$421.27</td>
+                <td>1.23</td>
+                <td>2.4%</td>
+                <td><div class="performance-bar"></div></td>
+            </tr>
+            <!-- Repeat similar rows for other companies -->
+        </tbody>
+    </table>
+</div>
+{% endblock %}

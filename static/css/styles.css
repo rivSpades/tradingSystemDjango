@@ -1,0 +1,98 @@
+/* General Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: #14141c;
+    color: #fff;
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1f1f28;
+    padding: 15px 30px;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+}
+
+.navbar-brand img {
+    height: 40px;
+    margin-right: 10px;
+}
+
+.search-bar {
+    position: relative;
+}
+
+.search-bar input {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background: #2a2a3c;
+    color: #fff;
+}
+
+.search-bar i {
+    position: absolute;
+    right: 15px;
+    top: 12px;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+}
+
+.user-profile img {
+    height: 40px;
+    border-radius: 50%;
+    margin-left: 10px;
+}
+
+/* Dashboard Styling */
+.dashboard {
+    padding: 30px;
+}
+
+.trending-strategies {
+    display: flex;
+    justify-content: space-between;
+}
+
+.strategy-card {
+    background: #242435;
+    padding: 20px;
+    border-radius: 10px;
+    width: 30%;
+}
+
+.strategy-info h3 {
+    margin-bottom: 10px;
+}
+
+.market-data {
+    margin-top: 30px;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.market-data th, .market-data td {
+    padding: 15px;
+    text-align: left;
+}
+
+.performance-bar {
+    height: 10px;
+    width: 50px;
+    background: #28a745;
+    border-radius: 5px;
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>SmartAlgo Trading Dashboard</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <img src="{% static 'images/logo.png' %}" alt="SmartAlgo Logo">
+            <span>SmartAlgo</span>
+        </div>
+        <div class="search-bar">
+            <input type="text" placeholder="Search...">
+            <i class="fas fa-search"></i>
+        </div>
+        <div class="user-profile">
+            <span>Hello, Steve Riley</span>
+            <img src="{% static 'images/profile.png' %}" alt="User Profile">
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        {% block content %}
+        <!-- Content from child templates will be injected here -->
+        {% endblock %}
+    </div>
+
+    <!-- Scripts -->
+    <script src="{% static 'js/script.js' %}"></script>
+</body>
+</html>
