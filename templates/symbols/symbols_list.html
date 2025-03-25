@@ -1,67 +1,201 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="dashboard">
-    <!-- Top Trending Strategy Section -->
-    <div class="trending-strategies">
-        <div class="strategy-card">
-            <div class="strategy-info">
-                <h3>Meta Platforms</h3>
-                <span>Reward Rate: 48.23%</span>
-                <span>2.25%</span>
-            </div>
-            <div class="chart">
-                <!-- Chart SVG or Canvas Placeholder -->
-            </div>
+<div class="container mt-4">
+    <h1 class="text-center mb-4">Symbols List</h1>
+
+    <!-- Filter Tabs -->
+    <div class="mb-4">
+        <ul class="nav nav-tabs" id="exchangeTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <a class="nav-link {% if request.GET.exchange == '' %}active{% endif %}" id="all-tab" data-bs-toggle="tab" href="?exchange=" role="tab" aria-controls="all" aria-selected="true">All Exchanges</a>
+            </li>
+            {% for exchange in exchanges %}
+            <li class="nav-item" role="presentation">
+                <a class="nav-link {% if request.GET.exchange == exchange.name %}active{% endif %}" id="{{ exchange.name }}-tab" data-bs-toggle="tab" href="?exchange={{ exchange.name }}" role="tab" aria-controls="{{ exchange.name }}" aria-selected="false">{{ exchange.name }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Search by Ticker -->
+        <div class="col-md-6">
+            <form method="GET" action="">
+                <div class="input-group">
+                    <input type="text" name="search" class="form-control" placeholder="Search by ticker or name"
+                           value="{{ request.GET.search }}">
+                    <button class="btn btn-primary" type="submit">Search</button>
+                </div>
+            </form>
         </div>
-        <div class="strategy-card">
-            <div class="strategy-info">
-                <h3>Tesla, Inc</h3>
-                <span>Reward Rate: 48.23%</span>
-                <span>2.25%</span>
-            </div>
-            <div class="chart">
-                <!-- Chart SVG or Canvas Placeholder -->
-            </div>
+
+        <!-- Update Symbols Button -->
+        <div class="col-md-6 text-end">
+            <form method="POST" action="{% url 'update_symbols' %}" data-url="{% url 'update_symbols' %}"
+                  onsubmit="showLoading(event, this.getAttribute('data-url'), 'update-btn', 'btn-text', 'btn-spinner')">
+                {% csrf_token %}
+                <button id="update-btn" class="btn btn-warning" type="submit">
+                    <span id="btn-text">Update Symbols</span>
+                    <span id="btn-spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                </button>
+            </form>
         </div>
-        <div class="strategy-card">
-            <div class="strategy-info">
-                <h3>NVIDIA Corporation</h3>
-                <span>Reward Rate: 48.23%</span>
-                <span>2.25%</span>
-            </div>
-            <div class="chart">
-                <!-- Chart SVG or Canvas Placeholder -->
-            </div>
+        
+        <!-- Update Daily Prices Button -->
+        <div class="col-md-6 text-end">
+            <form method="POST" action="{% url 'update_daily_prices' %}" data-url="{% url 'update_daily_prices' %}"
+                  onsubmit="showLoading(event, this.getAttribute('data-url'), 'update-daily-prices-btn', 'btn-daily-text', 'btn-daily-spinner')">
+                {% csrf_token %}
+                <button id="update-daily-prices-btn" class="btn btn-success" type="submit">
+                    <span id="btn-daily-text">Update Daily Prices</span>
+                    <span id="btn-daily-spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                </button>
+            </form>
+        </div>
+        
+
+    <!-- Progress Bar -->
+    <div class="progress mt-4" id="progress-bar-container" style="height: 30px; display: none;">
+        <div class="progress-bar" id="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <span id="progress-text">0%</span>
         </div>
     </div>
 
-    <!-- Market Data Table -->
-    <table class="market-data">
-        <thead>
-            <tr>
-                <th>Company Name</th>
-                <th>High</th>
-                <th>Low</th>
-                <th>Prev Close</th>
-                <th>Change</th>
-                <th>Gain</th>
-                <th>5 Day Performance</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Sample Rows -->
-            <tr>
-                <td>Microsoft Corporation Common Stock</td>
-                <td>$490.82</td>
-                <td>$385.25</td>
-                <td>$421.27</td>
-                <td>1.23</td>
-                <td>2.4%</td>
-                <td><div class="performance-bar"></div></td>
-            </tr>
-            <!-- Repeat similar rows for other companies -->
-        </tbody>
-    </table>
+    <!-- Symbols Table -->
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Ticker</th>
+                    <th>Exchange</th>
+                    <th>Last Price</th>
+                    <th>Last Close Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for symbol in page_obj %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ symbol.name }}</td>
+                    <td>{{ symbol.ticker }}</td>
+                    <td>{{ symbol.exchange.name }}</td>
+                    <td>
+                        {% if symbol.last_close_price is not None %}
+                            ${{ symbol.last_close_price|floatformat:2 }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if symbol.last_close_date %}
+                            {{ symbol.last_close_date|date:"Y-m-d" }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>                    
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center">No symbols available.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.exchange %}&exchange={{ request.GET.exchange }}{% endif %}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span> Previous
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&laquo; Previous</span>
+            </li>
+            {% endif %}
+    
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.exchange %}&exchange={{ request.GET.exchange }}{% endif %}" aria-label="Next">
+                    Next <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Next &raquo;</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
 </div>
+
+<!-- JavaScript -->
+<script>
+function showLoading(event, url, buttonId, textId, spinnerId) {
+    event.preventDefault();  // Prevent default form submission
+
+    let btn = document.getElementById(buttonId);
+    let btnText = document.getElementById(textId);
+    let btnSpinner = document.getElementById(spinnerId);
+    let progressBarContainer = document.getElementById("progress-bar-container");
+    let progressBar = document.getElementById("progress-bar");
+    let progressText = document.getElementById("progress-text");
+
+    // Disable button to prevent multiple clicks
+    btn.disabled = true;
+    btnText.textContent = "Updating...";
+    btnSpinner.classList.remove("d-none"); // Show spinner
+    progressBarContainer.style.display = 'block'; // Show progress bar container
+
+    // Trigger the request to start the update task
+    fetch(url, {
+        method: "POST",
+        body: new FormData(event.target),
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.task_id) {
+            // Track the progress of the task
+            trackProgress(data.task_id);
+        }
+    });
+}
+
+function trackProgress(task_id) {
+    let progressBar = document.getElementById("progress-bar");
+    let progressText = document.getElementById("progress-text");
+
+    let interval = setInterval(() => {
+        fetch(`/symbols/task-progress/?task_id=${task_id}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.state === 'PENDING') {
+                    progressBar.style.width = "0%";
+                    progressText.textContent = "0%";
+                } else if (data.state === 'SUCCESS') {
+                    progressBar.style.width = "100%";
+                    progressText.textContent = "100%";
+                    clearInterval(interval);
+                    alert("Update completed!");
+                } else if (data.state === 'FAILURE') {
+                    alert("Task failed!");
+                    clearInterval(interval);
+                } else {
+                    progressBar.style.width = `${data.progress}%`;
+                    progressText.textContent = `${data.progress}%`;
+                }
+            });
+    }, 1000);  // Poll every second
+}
+</script>
 {% endblock %}
