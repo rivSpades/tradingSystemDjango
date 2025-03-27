@@ -25,9 +25,14 @@ SECRET_KEY = 'django-insecure-i2xzam2hey47^(o9y6roy0x*t@u3djple(an#ft3s9!(^u)c65
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
+CORS_ALLOW_ALL_ORIGINS = True  # Allows all domains (useful for development)
+CORS_ALLOW_CREDENTIALS = True
 
-
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React frontend running locally
+   
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -38,11 +43,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'symbols',
+    'strategies',
+    'backtesting',
     'django_celery_results',
     'django_celery_progress',
+    'rest_framework',
+    "django_json_widget",
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,6 +61,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'trading_system.urls'
@@ -69,6 +81,11 @@ TEMPLATES = [
         },
     },
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,  # Adjust the number of items per page
+}
 
 WSGI_APPLICATION = 'trading_system.wsgi.application'
 

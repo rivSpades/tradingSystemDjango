@@ -6,12 +6,41 @@ from django.db.models import Q,Subquery,OuterRef
 from django.views import View
 from django.shortcuts import redirect
 from django.contrib import messages
-
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from .tasks  import update_symbols,update_daily_prices
+from .serializers import SymbolSerializer
 from celery.result import AsyncResult
 from django.http import JsonResponse
-def symbols(request):
-	return HttpResponse("Hello world from symbols") #also its possible o pass html inside the function
+from django.db.models import OuterRef, Subquery
+from django.views.generic import ListView
+from django.db.models import Q
+
+
+
+class SymbolListView(ListAPIView):
+    serializer_class = SymbolSerializer
+
+    def get_queryset(self):
+        keyword = self.request.query_params.get('search', None)  # Get 'search' query parameter
+
+        latest_price_subquery = models.DailyPrice.objects.filter(
+            symbol=OuterRef('pk')
+        ).order_by('-price_date')
+
+        queryset = models.Symbols.objects.all().annotate(
+            last_close_price=Subquery(latest_price_subquery.values('close_price')[:1]),
+            last_close_date=Subquery(latest_price_subquery.values('price_date')[:1])
+        )
+
+        # Apply filtering if a keyword is provided
+        if keyword:
+            queryset = queryset.filter(
+                Q(ticker__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        return queryset
+
 
 class SymbolDetailView(DetailView):
 
@@ -24,45 +53,11 @@ class SymbolDetailView(DetailView):
 	slug_field = 'ticker'
 	slug_url_kwarg = 'ticker'
 
-from django.db.models import OuterRef, Subquery
-from django.views.generic import ListView
-from django.db.models import Q
 
-class SymbolListView(ListView):
-    model = models.Symbols
-    template_name = 'symbols/symbols_list.html'
-    context_object_name = 'symbols'
-    paginate_by = 10  # Display 10 symbols per page
 
-    def get_queryset(self):
-        # Subquery for the latest close price and date
-        latest_price_subquery = models.DailyPrice.objects.filter(
-            symbol=OuterRef('pk')
-        ).order_by('-price_date')
 
-        queryset = models.Symbols.objects.all().annotate(
-            last_close_price=Subquery(latest_price_subquery.values('close_price')[:1]),
-            last_close_date=Subquery(latest_price_subquery.values('price_date')[:1])
-        )
 
-        # Get search and filter parameters
-        search_query = self.request.GET.get('search', None)
-        exchange_filter = self.request.GET.get('exchange', None)
 
-        if search_query:
-            queryset = queryset.filter(
-                Q(ticker__icontains=search_query) | Q(name__icontains=search_query)
-            )
-
-        if exchange_filter:
-            queryset = queryset.filter(exchange__name=exchange_filter)
-
-        return queryset
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['exchanges'] = models.Exchange.objects.all()  # Fetch all available exchanges for the filter tabs
-        return context
 
 
 class SymbolUpdateView(View):
