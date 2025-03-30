@@ -1,20 +1,20 @@
-from .strategy_logic import MeanRevertingStrategy
+
 from symbols.models import DailyPrice
 import pandas as pd
 import numpy as np
 import statsmodels.tsa.stattools as ts
 from hurst import compute_Hc
-STRATEGY_CLASSES = {
-    "mean-reverting": MeanRevertingStrategy,
+# STRATEGY_CLASSES = {
+#     "mean-reverting": MeanRevertingStrategy,
 
-}
+# }
 
-def get_strategy_executor(strategy):
-    """Returns the correct strategy class based on slug."""
-    strategy_class = STRATEGY_CLASSES.get(strategy.slug)
-    if strategy_class:
-        return strategy_class(strategy.parameters)
-    raise ValueError(f"Unknown strategy slug: {strategy.slug}")
+# def get_strategy_executor(strategy):
+#     """Returns the correct strategy class based on slug."""
+#     strategy_class = STRATEGY_CLASSES.get(strategy.slug)
+#     if strategy_class:
+#         return strategy_class(strategy.parameters)
+#     raise ValueError(f"Unknown strategy slug: {strategy.slug}")
 
 
 
@@ -31,16 +31,16 @@ class StrategyUtils:
         Perform the Augmented Dickey-Fuller test for stationarity.
         Returns True if the time series is stationary.
         """
-        if df.empty or 'close_price' not in df.columns:
+        if df.empty or 'Close' not in df.columns:
             return False
 
-        df['close_price'] = df['close_price'].astype(float)
+        df['Close'] = df['Close'].astype(float)
 
-        if df['close_price'].std() == 0:
+        if df['Close'].std() == 0:
             return False  # No variance, can't be stationary
 
         try:
-            results = ts.adfuller(df['close_price'], 1)
+            results = ts.adfuller(df['Close'], 1)
             critical_value = results[0]
             p_value = results[1]
             t_values = results[4]  # Critical values at different confidence levels
@@ -55,10 +55,10 @@ class StrategyUtils:
         Calculate the Hurst exponent to check for mean-reverting behavior.
         Returns True if the exponent suggests mean reversion.
         """
-        if df.empty or 'close_price' not in df.columns:
+        if df.empty or 'Close' not in df.columns:
             return False
 
-        asset_prices = np.array(df['close_price'].astype(float))
+        asset_prices = np.array(df['Close'].astype(float))
 
         if np.any(asset_prices == 0):
             asset_prices = asset_prices[asset_prices != 0]
@@ -89,10 +89,10 @@ class StrategyUtils:
         """
         Calculate a simple moving average.
         """
-        if df.empty or 'close_price' not in df.columns:
+        if df.empty or 'Close' not in df.columns:
             return df
 
-        df['MA_' + str(n)] = df['close_price'].rolling(n, min_periods=n).mean()
+        df['MA_' + str(n)] = df['Close'].rolling(n, min_periods=n).mean()
         return df
     @staticmethod
     def calculate_ratio(df):
@@ -101,12 +101,12 @@ class StrategyUtils:
         df = StrategyUtils.moving_average(df, ma)
         
         # Ensure numeric conversion
-        df['close_price'] = pd.to_numeric(df['close_price'], errors='coerce')
+        df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
         df[f'MA_{ma}'] = pd.to_numeric(df[f'MA_{ma}'], errors='coerce')
 
         # Calculate ratio and avoid division by zero
-        df['ratio'] = df['close_price'] / df[f'MA_{ma}']
-        df['ratio'].fillna(1, inplace=True)  # Fill NaN values with 1
+        df['ratio'] = df['Close'] / df[f'MA_{ma}']
+        df['ratio'] = df['ratio'].fillna(1)
         return df
 
     @staticmethod

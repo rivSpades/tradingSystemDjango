@@ -80,6 +80,8 @@ class MeanRevertingStrategy:
             inplace=True,
         )
 
+        print(df)
+
         # Split Data
         current_data, future_data = StrategyUtils.train_test_split(df, split_ratio=0.5)
 
@@ -91,28 +93,43 @@ class MeanRevertingStrategy:
             # Check for signals
             signal = self.execute(current_data, buy, last_action)
 
+            if buy:
+                current_low_price = future_data['Low'].iloc[i]
+                current_high_price = future_data['High'].iloc[i]
+                if current_low_price < lowest_price:
+                    lowest_price = current_low_price
+
+                if current_high_price > highest_price:
+                    highest_price = current_high_price
+
             if signal == "Long" and not buy:
                 buy = True
                 last_action = "Long"
+                lowest_price = future_data["Close"].iloc[i]
+                highest_price = future_data["Close"].iloc[i]
+                entry_price = future_data["Close"].iloc[i] 
                 TradeHistory.objects.create(
                     backtest=backtest,
                     symbol=symbol,
                     entry_date=future_data["Date"].iloc[i],
-                    action="Long",
+                    action="LONG",
                     entry_price=future_data["Close"].iloc[i],
-                    quantity=100,
+                    quantity=(100/future_data["Close"].iloc[i]),
                 )
 
             elif signal == "Short" and not buy:
                 buy = True
                 last_action = "Short"
+                lowest_price = future_data["Close"].iloc[i]
+                highest_price = future_data["Close"].iloc[i]      
+                entry_price = future_data["Close"].iloc[i]          
                 TradeHistory.objects.create(
                     backtest=backtest,
                     symbol=symbol,
                     entry_date=future_data["Date"].iloc[i],
-                    action="Short",
+                    action="SHORT",
                     entry_price=future_data["Close"].iloc[i],
-                    quantity=100,
+                    quantity=(100/future_data["Close"].iloc[i]),
                 )
 
             elif signal == "Exit" and buy:
@@ -125,7 +142,7 @@ class MeanRevertingStrategy:
                     exit_price = future_data["Close"].iloc[i]
                     profit_loss = (
                         (exit_price - last_trade.entry_price) * last_trade.quantity
-                        if last_trade.action == "Long"
+                        if last_trade.action == "LONG"
                         else (last_trade.entry_price - exit_price) * last_trade.quantity
                     )
 
@@ -133,6 +150,7 @@ class MeanRevertingStrategy:
                     last_trade.exit_date = future_data["Date"].iloc[i]
                     last_trade.exit_price = exit_price
                     last_trade.profit_loss = profit_loss
+                    last_trade.max_drawdown =  (highest_price -entry_price) / entry_price * 100 if last_trade.action == "SHORT" else (entry_price - lowest_price) / entry_price * 100
                     last_trade.save()
 
                     # Create a new record for the exit action
@@ -141,14 +159,18 @@ class MeanRevertingStrategy:
                         symbol=symbol,
                         entry_date=last_trade.entry_date,
                         exit_date=future_data["Date"].iloc[i],
-                        action="Exit",
+                        action="EXIT",
                         entry_price=last_trade.entry_price,
                         exit_price=exit_price,
                         quantity=last_trade.quantity,
                         profit_loss=profit_loss,
+                        max_drawdown= (highest_price -entry_price) / entry_price * 100 if last_trade.action == "SHORT" else (entry_price - lowest_price) / entry_price * 100
                     )
 
                 buy = False
                 last_action = ""
+
+
+
 
         return f"Backtest completed for {ticker} ({start_date} - {end_date})."
