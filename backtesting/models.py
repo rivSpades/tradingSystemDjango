@@ -1,5 +1,5 @@
 from django.db import models
-from strategies.models import Strategy
+from strategies.models import Strategy,CorrelatedPair
 from symbols.models import Symbols
 from django.utils import timezone
 
@@ -15,6 +15,7 @@ class BackTestingStrategy(models.Model):
 class TradeHistory(models.Model):
     """ Stores individual trade executions. """
     symbol = models.ForeignKey(Symbols, on_delete=models.CASCADE)  
+    correlated_pair = models.ForeignKey(CorrelatedPair, null=True, blank=True, on_delete=models.SET_NULL)  # NEW: Link to correlated pair
     backtest = models.ForeignKey(BackTestingStrategy, on_delete=models.CASCADE, related_name="trades")
     entry_date = models.DateField()  
     exit_date = models.DateField(null=True, blank=True)  
@@ -33,10 +34,11 @@ class StrategyStatistics(models.Model):
     """ Aggregated statistics for a strategy across all symbols. """
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE, related_name="strategy_statistics")
     backtest = models.ForeignKey(BackTestingStrategy, on_delete=models.CASCADE, related_name="strategy_stats")
+    
     action = models.CharField(max_length=5, choices=[("LONG", "LONG"), ("SHORT", "SHORT")], null=True, blank=True)  
     total_trades = models.IntegerField(null=True, blank=True)  
     win_rate = models.FloatField(null=True, blank=True)  
-    roi = models.FloatField(null=True, blank=True) 
+    total_roi = models.FloatField(null=True, blank=True) 
     total_profit_loss = models.FloatField(null=True, blank=True)  
     average_holding_period = models.FloatField(null=True, blank=True)  
     average_max_drawdown = models.FloatField(null=True, blank=True)  
@@ -48,6 +50,7 @@ class StrategyStatistics(models.Model):
 class SymbolStatistics(models.Model):
     """ Performance of a specific symbol within a strategy backtest. """
     symbol = models.ForeignKey(Symbols, on_delete=models.CASCADE)  
+    correlated_pair = models.ForeignKey(CorrelatedPair, null=True, blank=True, on_delete=models.SET_NULL)  # NEW: Link to correlated pair
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE)  
     backtest = models.ForeignKey(BackTestingStrategy, on_delete=models.CASCADE, related_name="symbol_stats")
     action = models.CharField(max_length=5, choices=[("LONG", "LONG"), ("SHORT", "SHORT")], null=True, blank=True)  
@@ -55,7 +58,7 @@ class SymbolStatistics(models.Model):
     win_rate = models.FloatField(null=True, blank=True)  
     profit_loss = models.FloatField(null=True, blank=True)  
     average_holding_period = models.FloatField(null=True, blank=True)  
-    roi = models.FloatField(null=True, blank=True)  
+    total_roi = models.FloatField(null=True, blank=True)  
     average_max_drawdown = models.FloatField(null=True, blank=True)  
     created_at = models.DateTimeField(default=timezone.now)
 

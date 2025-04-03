@@ -2,7 +2,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.db.models.signals import pre_save
 from django.utils import timezone
-from symbols.models import Symbols
+from symbols.models import Symbols,Exchange
 
 class Strategy(models.Model):
     name = models.CharField(max_length=255, unique=True)
@@ -33,7 +33,8 @@ pre_save.connect(pre_save_strategy_receiver, sender=Strategy)
 class StrategySymbol(models.Model):
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE)
     symbol = models.ForeignKey(Symbols, on_delete=models.CASCADE)
-    is_active = models.BooleanField(default=False)  # Whether the strategy is active for this symbol
+    is_active_long = models.BooleanField(default=False)  # Active for LONG trades
+    is_active_short = models.BooleanField(default=False)  # Active for SHORT trades
     slot_free = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -41,4 +42,18 @@ class StrategySymbol(models.Model):
         unique_together = ('strategy', 'symbol')  # Prevent duplicate entries
 
     def __str__(self):
-        return f"{self.strategy.name} - {self.symbol.ticker} ({'Active' if self.is_active else 'Inactive'})"
+        return f"{self.strategy.name} - {self.symbol.ticker} (Long: {'Active' if self.is_active_long else 'Inactive'}, Short: {'Active' if self.is_active_short else 'Inactive'})"
+    
+
+class CorrelatedPair(models.Model):
+    exchange = models.ForeignKey(Exchange, on_delete=models.CASCADE)  # The exchange this pair belongs to
+    symbol_1 = models.ForeignKey(Symbols, related_name='correlation_first', on_delete=models.CASCADE)
+    symbol_2 = models.ForeignKey(Symbols, related_name='correlation_second', on_delete=models.CASCADE)
+    correlation = models.FloatField()  # Store the correlation coefficient
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('exchange', 'symbol_1', 'symbol_2')  # Prevent duplicate pairs
+
+    def __str__(self):
+        return f"{self.symbol_1.ticker} - {self.symbol_2.ticker}"    

@@ -5,7 +5,8 @@ from symbols.models import Symbols
 import numpy as np
 from django.db.models import Avg, Count, Sum, F
 from .models import BackTestingStrategy,StrategyStatistics,SymbolStatistics,TradeHistory
-from strategies.strategy_logic import MeanRevertingStrategy
+from strategies.strategy_logic import MeanRevertingStrategy,CoIntegrationStrategy
+from strategies.models import StrategySymbol,CorrelatedPair
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -31,28 +32,47 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
             parameters=strategy.parameters
         )
 
-        # Fetch symbols based on the provided list or all symbols
-        if symbol_list:
-            symbols = Symbols.objects.filter(ticker__in=symbol_list)
-        else:
-            symbols = Symbols.objects.all()
+        if strategy.slug == "mean-reverting":
 
-        if not symbols.exists():
-            logger.warning("No symbols found for backtesting.")
-            return "No symbols available for backtesting."
+            # Fetch symbols based on the provided list or all symbols
+            if symbol_list:
+                symbols = Symbols.objects.filter(ticker__in=symbol_list)
+            else:
+                symbols = Symbols.objects.all()
 
-        # Instantiate the strategy logic
-        strategy_logic = MeanRevertingStrategy(strategy.parameters)
+            if not symbols.exists():
+                logger.warning("No symbols found for backtesting.")
+                return "No symbols available for backtesting."
 
-        # Loop through selected symbols and execute backtest
-        for symbol in symbols:
-            logger.info(f"Running backtest for {symbol.ticker}...")
-            result = strategy_logic.backtest(backtest, symbol.ticker, start_date, end_date)
-            logger.info(result)
+            # Instantiate the strategy logic
+            strategy_logic = MeanRevertingStrategy(strategy.parameters)
+
+            # Loop through selected symbols and execute backtest
+            for symbol in symbols:
+                logger.info(f"Running backtest for {symbol.ticker}...")
+                result = strategy_logic.backtest(backtest, symbol.ticker, start_date, end_date)
+                logger.info(result)
+
+        elif strategy.slug == "cointegration":  
+
+            correlated_pairs = CorrelatedPair.objects.all()  # You can filter based on certain criteria here if needed
+
+            if not correlated_pairs.exists():
+                logger.warning("No correlated pairs found for Cointegration strategy.")
+                return "No correlated pairs available for backtesting."                                     
+
+            strategy_logic = CoIntegrationStrategy(strategy.parameters)
+
+            for pair in correlated_pairs:
+                logger.info(f"Running backtest for Correlated Pair: {pair.symbol_1.ticker} & {pair.symbol_2.ticker}...")
+               
+                result = strategy_logic.backtest(backtest, pair.symbol_1.ticker,pair.symbol_2.ticker, start_date, end_date)
+               
+                logger.info(result)            
 
         calculate_symbol_statistics(backtest)
-        calculate_strategy_statistics(backtest)
         
+
         return f"Backtest completed for {len(symbols)} symbols."
 
     except Strategy.DoesNotExist:
@@ -103,7 +123,7 @@ def calculate_symbol_statistics(backtest):
                     'win_rate': win_rate,
                     'profit_loss': total_profit_loss,
                     'average_holding_period': avg_holding_period,
-                    'roi': roi,
+                    'total_roi': roi,
                     'average_max_drawdown': max_drawdowns,
                 }
             )
@@ -113,13 +133,26 @@ def calculate_symbol_statistics(backtest):
 
 def calculate_strategy_statistics(backtest):
     """
-    Calculates and stores aggregated statistics for the overall strategy, separated by LONG and SHORT actions.
+    Calculates and stores aggregated statistics for the overall strategy, 
+    considering only symbols where the strategy is active for LONG or SHORT.
     """
     for action in ["LONG", "SHORT"]:
-        trades = TradeHistory.objects.filter(backtest=backtest, action=action, exit_price__isnull=False)
+        # Get symbols where strategy is active for this action
+        if action == "LONG":
+            active_symbols = StrategySymbol.objects.filter(strategy=backtest.strategy, is_active_long=True).values_list('symbol', flat=True)
+        else:  # SHORT
+            active_symbols = StrategySymbol.objects.filter(strategy=backtest.strategy, is_active_short=True).values_list('symbol', flat=True)
+
+        # Get trades only for active symbols
+        trades = TradeHistory.objects.filter(
+            backtest=backtest, 
+            action=action, 
+            exit_price__isnull=False, 
+            symbol__in=active_symbols
+        )
 
         if not trades.exists():
-            logger.warning(f"No {action} trades found for strategy statistics.")
+            logger.warning(f"No {action} trades found for active symbols in strategy {backtest.strategy.name}.")
             continue
 
         total_trades = trades.count()
@@ -134,22 +167,24 @@ def calculate_strategy_statistics(backtest):
         ]
         avg_holding_period = np.mean(holding_periods) if holding_periods else 0
 
-        roi = (total_profit_loss / sum(trade.entry_price * trade.quantity for trade in trades)) * 100 if trades else 0
+        total_entry_value = sum(trade.entry_price * trade.quantity for trade in trades)
+        roi = (total_profit_loss / total_entry_value) * 100 if total_entry_value > 0 else 0
 
         avg_max_drawdown = trades.aggregate(Avg('max_drawdown'))['max_drawdown__avg'] or 0
 
+        # Update or create StrategyStatistics for this action
         StrategyStatistics.objects.update_or_create(
             backtest=backtest,
             strategy=backtest.strategy,
-            action=action,  # Separate LONG and SHORT
+            action=action,
             defaults={
                 'total_trades': total_trades,
                 'win_rate': win_rate,
-                'roi': roi,
+                'total_roi': roi,
                 'total_profit_loss': total_profit_loss,
                 'average_holding_period': avg_holding_period,
                 'average_max_drawdown': avg_max_drawdown,
             }
         )
 
-        logger.info(f"Strategy statistics calculated for {backtest.strategy.name} - {action}")
+        logger.info(f"Strategy statistics calculated for {backtest.strategy.name} - {action}, considering only active symbols.")
