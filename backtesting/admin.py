@@ -10,7 +10,7 @@ class BackTestingStrategyAdmin(admin.ModelAdmin):
 @admin.register(TradeHistory)
 class TradeHistoryAdmin(admin.ModelAdmin):
     list_display = ("symbol","correlated_pair", "backtest", "action", "entry_price", "exit_price", "quantity", "max_drawdown","profit_loss","entry_date","exit_date","created_at")
-    search_fields = ("symbol__ticker", "backtest__strategy__name")
+    search_fields = ("symbol__ticker", "backtest__strategy__name", "correlated_pair__symbol_1__ticker", "correlated_pair__symbol_2__ticker")
     list_filter = ("action", "entry_date", "exit_date","created_at")
 
 @admin.register(StrategyStatistics)
@@ -22,5 +22,5 @@ class StrategyStatisticsAdmin(admin.ModelAdmin):
 @admin.register(SymbolStatistics)
 class SymbolStatisticsAdmin(admin.ModelAdmin):
     list_display = ("symbol","correlated_pair", "strategy","action", "backtest", "total_trades", "average_holding_period","win_rate", "profit_loss","total_roi", "average_max_drawdown", "created_at")
-    search_fields = ("symbol__ticker", "strategy__name")
+    search_fields = ("symbol__ticker", "strategy__name","correlated_pair__symbol_1__ticker", "correlated_pair__symbol_2__ticker")
     list_filter = ("created_at",)

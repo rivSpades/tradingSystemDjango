@@ -37,7 +37,7 @@ class CoIntegrationStrategy:
     def backtest(self, backtest, ticker_1,ticker_2, start_date, end_date=date.today()):     
         buy = False
         last_action = ""
-        print(ticker_1 + "+" + ticker_2)
+        
 
         try:
             symbol_1 = Symbols.objects.get(ticker=ticker_1)
@@ -53,6 +53,7 @@ class CoIntegrationStrategy:
             )
         except CorrelatedPair.DoesNotExist:
             return f"No correlated pair found for {ticker_1} and {ticker_2}"
+
 
 
         historical_data_1 = DailyPrice.objects.filter(
@@ -455,3 +456,40 @@ class MeanRevertingStrategy:
 
 
         return f"Backtest completed for {ticker} ({start_date} - {end_date})."
+
+
+    def execution(self, ticker, start_date,is_active_long,is_active_short, end_date=date.today()):
+        buy = False #slottfree
+        last_action = "" #if not slot free what is the last action
+        print(ticker)
+        # Fetch symbol
+        try:
+            symbol = Symbols.objects.get(ticker=ticker)
+        except Symbols.DoesNotExist:
+            return f"Symbol {ticker} not found in database."
+
+        # Fetch historical price data
+        historical_data = DailyPrice.objects.filter(
+            symbol=symbol, price_date__range=[start_date, end_date]
+        ).order_by("price_date")
+
+        if not historical_data.exists():
+            return f"No data found for {ticker} between {start_date} and {end_date}."
+
+        # Convert to DataFrame
+        df = pd.DataFrame.from_records(
+            historical_data.values(
+                "price_date", "open_price", "high_price", "low_price", "close_price", "volume"
+            )
+        )
+        df.rename(
+            columns={
+                "price_date": "Date",
+                "open_price": "Open",
+                "high_price": "High",
+                "low_price": "Low",
+                "close_price": "Close",
+                "volume": "Volume",
+            },
+            inplace=True,
+        )
