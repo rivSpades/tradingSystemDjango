@@ -53,7 +53,7 @@ class StrategySymbol(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        unique_together = ('strategy', 'symbol')  # Prevent duplicate entries
+        unique_together = ('strategy', 'symbol','correlated_pair')  # Prevent duplicate entries
 
     def __str__(self):
         return f"{self.strategy.name} - {self.symbol.ticker} (Long: {'Active' if self.is_active_long else 'Inactive'}, Short: {'Active' if self.is_active_short else 'Inactive'})"

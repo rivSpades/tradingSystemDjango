@@ -18,16 +18,16 @@ def analyze_and_enable_strategies(backtest):
             strategy = pair_stat.strategy
             action = pair_stat.action
 
-            avg_roi_per_trade = pair_stat.total_roi / pair_stat.total_trades if pair_stat.total_trades else 0
+            avg_roi_per_trade = pair_stat.total_roi 
             avg_holding_period = pair_stat.average_holding_period
             total_trades = pair_stat.total_trades
             win_rate = pair_stat.win_rate
             total_profit_loss = pair_stat.profit_loss
 
             pair_trading_is_eligible = (
-                3 <= avg_roi_per_trade < 1000 and
-                avg_holding_period < 70 and
-                total_trades >= 5 and
+                5 <= avg_roi_per_trade < 1000 and
+                avg_holding_period <= 70 and
+                total_trades >=3 and
                 win_rate >= 80 and
                 total_profit_loss > 0
             )
@@ -49,15 +49,15 @@ def analyze_and_enable_strategies(backtest):
                 symbol = symbol_stat.symbol
                 strategy = symbol_stat.strategy
                 
-                avg_roi_per_trade = symbol_stat.total_roi / symbol_stat.total_trades if symbol_stat.total_trades else 0
+                avg_roi_per_trade = symbol_stat.total_roi 
                 avg_holding_period = symbol_stat.average_holding_period
                 total_trades = symbol_stat.total_trades
                 win_rate = symbol_stat.win_rate
                 total_profit_loss = symbol_stat.profit_loss    
 
                 is_eligible = (
-                3 <= avg_roi_per_trade < 1000 and
-                avg_holding_period < 70 and
+                5 <= avg_roi_per_trade < 1000 and
+                avg_holding_period <= 70 and
                 total_trades >= 5 and
                 win_rate >= 80 and
                 total_profit_loss > 0
@@ -142,7 +142,7 @@ def analyze_and_enable_strategies(backtest):
             symbol = symbol_stat.symbol
             strategy = symbol_stat.strategy
             
-            avg_roi_per_trade = symbol_stat.total_roi / symbol_stat.total_trades if symbol_stat.total_trades else 0
+            avg_roi_per_trade = symbol_stat.total_roi 
             avg_holding_period = symbol_stat.average_holding_period
             total_trades = symbol_stat.total_trades
             win_rate = symbol_stat.win_rate
@@ -150,9 +150,9 @@ def analyze_and_enable_strategies(backtest):
 
             # Apply Filters
             is_eligible = (
-                3 <= avg_roi_per_trade < 1000 and
+                5 <= avg_roi_per_trade < 1000 and
                 avg_holding_period < 70 and
-                total_trades >= 2 and
+                total_trades >= 3 and
                 win_rate >= 80 and
                 total_profit_loss > 0
             )

@@ -1,4 +1,5 @@
 from symbols.models import DailyPrice, Symbols, Exchange
+from symbols.utils import DailyPriceManager
 from .models import CorrelatedPair
 import pandas as pd
 import numpy as np
@@ -131,13 +132,15 @@ class StrategyUtils:
         Returns True if cointegration is detected.
         """
         # Merge data on the index (assumes both have a date index)
+        
         df_combined = pd.merge(
             df1[['Close']], df2[['Close']],
             left_index=True, right_index=True,
             suffixes=('_1', '_2')
         ).dropna()
-
+     
         if df_combined.empty or len(df_combined) < 50:
+            print("not enough data")
             return False  # Not enough data for a valid test
         df_combined['Close_1'] = pd.to_numeric(df_combined['Close_1'], errors='coerce')
         df_combined['Close_2'] = pd.to_numeric(df_combined['Close_2'], errors='coerce')
@@ -155,11 +158,14 @@ class StrategyUtils:
 
 
     @staticmethod
-    def find_highly_correlated_pairs():
+    def find_highly_correlated_pairs(exchange_name=None):
         """
         Finds and saves highly correlated symbol pairs (corr > 0.98) for each exchange.
         """
-        exchanges = Exchange.objects.all()  # Get all exchanges
+        if exchange_name:
+            exchanges = Exchange.objects.filter(name = exchange_name)  # Get all exchanges 
+        else:               
+            exchanges = Exchange.objects.all()  # Get all exchanges
 
         for exchange in exchanges:
             print(f"Processing exchange: {exchange.name}")
@@ -174,6 +180,7 @@ class StrategyUtils:
             # Fetch daily close prices
             price_data = {}
             for ticker in symbol_tickers:
+                DailyPriceManager.insert_daily_price(ticker,"2013-01-01")
                 prices = DailyPrice.objects.filter(symbol__ticker=ticker).order_by('price_date').values('price_date', 'close_price')
                 price_data[ticker] = {price['price_date']: price['close_price'] for price in prices}
 

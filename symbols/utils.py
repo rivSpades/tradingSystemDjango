@@ -26,6 +26,22 @@ class SymbolsManager:
 
         return pd.DataFrame()
 
+    @staticmethod
+    def get_cryptos():
+        """Fetch the list of active stock symbols from Alpha Vantage."""
+        endpoint = 'https://www.alphavantage.co/digital_currency_list'
+        response = requests.get(endpoint)
+
+        if response.status_code == 200:
+            csv_data = StringIO(response.text)
+            df = pd.read_csv(csv_data)
+
+        
+
+            return df
+
+        return pd.DataFrame()    
+
     @classmethod
     def insert_symbols(cls):
         """Insert new symbols into the database from Alpha Vantage and ensure exchange is correctly set."""
@@ -60,6 +76,41 @@ class SymbolsManager:
             if not created and symbol_obj.exchange != exchange_obj:
                 symbol_obj.exchange = exchange_obj
                 symbol_obj.save()  # Save the updated symbol object
+
+    @classmethod
+    def insert_cryptos(cls):
+        """Insert new symbols into the database from Alpha Vantage and ensure exchange is correctly set."""
+        symbols = cls.get_cryptos()
+
+        for _, row in symbols.iterrows():
+            ticker = row['currency code']+'-USD'
+
+            if not ticker:
+                continue  # Skip rows with a null ticker
+
+            instrument = "crypto"
+            name = row['currency name']
+            exchange_name = "CRYPTO"
+            created_date = timezone.now()
+
+            # Ensure the exchange exists, or create it if it doesn't
+            exchange_obj, _ = Exchange.objects.get_or_create(name=exchange_name)
+
+            # Fetch or create the symbol
+            symbol_obj, created = Symbols.objects.get_or_create(
+                ticker=ticker,
+                defaults={
+                    'instrument': instrument,
+                    'name': name,
+                    'exchange': exchange_obj,  # Assign the ForeignKey object
+                    'created_date': created_date
+                }
+            )
+
+            # If the symbol already exists, update its exchange if it's empty or incorrect
+            if not created and symbol_obj.exchange != exchange_obj:
+                symbol_obj.exchange = exchange_obj
+                symbol_obj.save()  # Save the updated symbol object                
 
 
 class DailyPriceManager:
@@ -136,8 +187,8 @@ class DailyPriceManager:
             if last_date:
                 start_date = last_date + datetime.timedelta(days=1)  # Start from the next day
             else:
-                start_date = datetime.date.today()
-
+                start_date = "2013-01-01"
+            #print(start_date)
             # Call the insert_daily_price method to add the new data
             DailyPriceManager.insert_daily_price(symbol.ticker, start_date)
 
@@ -145,5 +196,5 @@ class DailyPriceManager:
     def get_last_date(symbol):
         """Fetch the last available date for a given symbol in the DailyPrice table."""
         last_entry = DailyPrice.objects.filter(symbol__ticker=symbol).order_by('-price_date').first()
-        return last_entry.price_date if last_entry else None
+        return last_entry.price_date if last_entry else False
 

@@ -1,12 +1,16 @@
 from datetime import date
+import logging
 import numpy as np
 import pandas as pd
 from django.db import models
 from .utils import StrategyUtils
 from .models import CorrelatedPair
 from backtesting.models import TradeHistory
+from symbols.utils import DailyPriceManager
 from symbols.models import Symbols, DailyPrice
 import statsmodels.api as sm
+
+logger = logging.getLogger(__name__)
 
 class CoIntegrationStrategy:
     def __init__(self, parameters):
@@ -43,6 +47,7 @@ class CoIntegrationStrategy:
             symbol_1 = Symbols.objects.get(ticker=ticker_1)
             symbol_2 = Symbols.objects.get(ticker=ticker_2)
         except Symbols.DoesNotExist:
+           
             return f"Symbol {ticker_1} or {ticker_2} not found in database."
 
         try:
@@ -52,10 +57,12 @@ class CoIntegrationStrategy:
                 symbol_2=symbol_2
             )
         except CorrelatedPair.DoesNotExist:
+           
             return f"No correlated pair found for {ticker_1} and {ticker_2}"
 
 
-
+        #DailyPriceManager.insert_daily_price(symbol_1.ticker,"2013-01-01")
+        #DailyPriceManager.insert_daily_price(symbol_2.ticker,"2013-01-01")
         historical_data_1 = DailyPrice.objects.filter(
             symbol=symbol_1, price_date__range=[start_date, end_date]
         ).order_by("price_date")
@@ -65,6 +72,7 @@ class CoIntegrationStrategy:
         ).order_by("price_date")        
 
         if not historical_data_1.exists() or not historical_data_2.exists() or len(historical_data_1)!=len(historical_data_2) :
+          
             return f"No data found for {ticker_1} or {ticker_2} between {start_date} and {end_date}."     
  
         # Convert to DataFrame
@@ -151,6 +159,7 @@ class CoIntegrationStrategy:
                     highest_price_2 = current_high_price_2      
 
             if signal == "Long" and not buy:
+               
                 buy = True
                 last_action = "Long"
                 lowest_price_1 = future_data_1["Close"].iloc[i]
@@ -159,7 +168,7 @@ class CoIntegrationStrategy:
                 highest_price_2 = future_data_2["Close"].iloc[i]                
                 entry_price_1 = future_data_1["Close"].iloc[i] 
                 entry_price_2 = future_data_2["Close"].iloc[i] 
-
+               
                 TradeHistory.objects.create(
                     backtest=backtest,
                     correlated_pair=correlated_pair,
@@ -180,6 +189,7 @@ class CoIntegrationStrategy:
                     entry_price=future_data_2["Close"].iloc[i],
                     quantity=(100/future_data_2["Close"].iloc[i]),
                 )   
+               
 
             elif signal == "Short" and not buy:
                 buy = True
@@ -211,7 +221,7 @@ class CoIntegrationStrategy:
                     entry_price=future_data_2["Close"].iloc[i],
                     quantity=(100/future_data_2["Close"].iloc[i]),
                 )    
-
+                logger.info(f"Short")
             elif signal == "Exit" and buy:     
                 #adicionar correlated pair
                 last_trade_1 = TradeHistory.objects.filter(
@@ -281,7 +291,8 @@ class CoIntegrationStrategy:
                         quantity=last_trade_2.quantity,
                         profit_loss=profit_loss_2,
                         max_drawdown= last_trade_2.max_drawdown
-                    )                    
+                    ) 
+                    logger.info(f"exit")                   
 
                 buy = False
                 last_action = ""   

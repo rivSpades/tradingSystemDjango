@@ -35,7 +35,7 @@ class StrategyStatistics(models.Model):
     strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE, related_name="strategy_statistics")
     backtest = models.ForeignKey(BackTestingStrategy, on_delete=models.CASCADE, related_name="strategy_stats")
     
-    action = models.CharField(max_length=5, choices=[("LONG", "LONG"), ("SHORT", "SHORT")], null=True, blank=True)  
+    action = models.CharField(max_length=20, choices=[("LONG", "LONG"), ("SHORT", "SHORT"),("PAIR_TRADING","PAIR_TRADING")], null=True, blank=True)  
     total_trades = models.IntegerField(null=True, blank=True)  
     win_rate = models.FloatField(null=True, blank=True)  
     total_roi = models.FloatField(null=True, blank=True) 
