@@ -11,9 +11,21 @@ def execute_strategies():
     
     strategy=Strategy.objects.get(slug='mean-reverting')
     strategy_symbols = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True), strategy=strategy)
-
+    strategy_instance = MeanRevertingStrategy(strategy.parameters)
     for strategy_symbol in strategy_symbols:
-        MeanRevertingStrategy.execution(strategy_symbol.symbol.ticker,is_active_long=strategy_symbol.is_active_long,is_active_short=strategy_symbol.is_active_short, start_date="2013-01-01")
-        
+                strategy_instance.execution(
+                strategy_symbol,
+                strategy_symbol.symbol,
+                strategy_symbol.is_active_long,
+                strategy_symbol.is_active_short,
+                start_date="2013-01-01"
+            )
 
+    strategy=Strategy.objects.get(slug='cointegration')        
+    strategy_instance = CoIntegrationStrategy(strategy.parameters)
+    correlated_pair_ids = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True),correlated_pair__isnull=False).values_list('correlated_pair', flat=True).distinct()
+    correlated_pairs = CorrelatedPair.objects.filter(id__in=correlated_pair_ids)
 
+    for correlated_pair in correlated_pairs:
+        strategy_instance.execution(correlated_pair,start_date="2013-01-01")            
+            

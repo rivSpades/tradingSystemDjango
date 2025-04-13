@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'symbols',
     'strategies',
     'backtesting',
+    'execution',
     'django_celery_results',
     'django_celery_progress',
     'rest_framework',
@@ -94,19 +95,29 @@ WSGI_APPLICATION = 'trading_system.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / "db.sqlite3",
-        'OPTIONS': {
-            'timeout': 20,  # Timeout in seconds
-        },
-        'POOL': {
-            'CONN_MAX_AGE': 600,  # Keep connections open for 10 minutes
-            'POOL_SIZE': 10,  # Maximum number of connections in the pool
-        },
-    }
-}
+     'default': {
+         'ENGINE': 'django.db.backends.sqlite3',
+         'NAME': BASE_DIR / "db.sqlite3",
+         'OPTIONS': {
+             'timeout': 40,  # Timeout in seconds
+         },
+         'POOL': {
+             'CONN_MAX_AGE': 600,  # Keep connections open for 10 minutes
+             'POOL_SIZE': 10,  # Maximum number of connections in the pool
+         },
+     }
+ }
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'trading_db',
+#         'USER': 'admin',
+#         'PASSWORD': 'admin',
+#         'HOST': '127.0.0.1',
+#         'PORT': '5433',
+#     }
+# }
 
 
 # Password validation

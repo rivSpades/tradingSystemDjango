@@ -6,8 +6,11 @@ from django.db import models
 from .utils import StrategyUtils
 from .models import CorrelatedPair
 from backtesting.models import TradeHistory
+from execution.models import TradeHistoryExec
+from strategies.models import StrategySymbol
 from symbols.utils import DailyPriceManager
 from symbols.models import Symbols, DailyPrice
+from execution.utils import ExecutionUtils
 import statsmodels.api as sm
 
 logger = logging.getLogger(__name__)
@@ -24,14 +27,14 @@ class CoIntegrationStrategy:
 
         if buy==False and StrategyUtils.zscore(Z.values)[-1]<=-2.0   and StrategyUtils.check_johansen_test(df_1,df_2) :
             #Long Spread - long asset 2 short asset 1
-            return "Long"
+            return "LONG"
         elif buy==False and   StrategyUtils.zscore(Z.values)[-1]>=2  and StrategyUtils.check_johansen_test(df_1,df_2):
             #"Short Spread - long asset 1 short asset 2 
-            return "Short"
-        elif buy==True and  last_action=="Long" and (StrategyUtils.zscore(Z.values)[-1]>0):
+            return "SHORT"
+        elif buy==True and  last_action=="LONG" and (StrategyUtils.zscore(Z.values)[-1]>0):
             #Exiting from Long Spread
             return 'Exit'
-        elif buy==True and  last_action=="Short" and (StrategyUtils.zscore(Z.values)[-1]<=0):
+        elif buy==True and  last_action=="SHORT" and (StrategyUtils.zscore(Z.values)[-1]<=0):
             #Exiting from Short Spread
             return 'Exit'            
         else:
@@ -158,10 +161,10 @@ class CoIntegrationStrategy:
                 if current_high_price_2 > highest_price_2:
                     highest_price_2 = current_high_price_2      
 
-            if signal == "Long" and not buy:
+            if signal == "LONG" and not buy:
                
                 buy = True
-                last_action = "Long"
+                last_action = "LONG"
                 lowest_price_1 = future_data_1["Close"].iloc[i]
                 highest_price_1 = future_data_1["Close"].iloc[i]
                 lowest_price_2 = future_data_2["Close"].iloc[i]
@@ -191,9 +194,9 @@ class CoIntegrationStrategy:
                 )   
                
 
-            elif signal == "Short" and not buy:
+            elif signal == "SHORT" and not buy:
                 buy = True
-                last_action = "Short"
+                last_action = "SHORT"
                 lowest_price_1 = future_data_1["Close"].iloc[i]
                 highest_price_1 = future_data_1["Close"].iloc[i]
                 lowest_price_2 = future_data_2["Close"].iloc[i]
@@ -221,7 +224,7 @@ class CoIntegrationStrategy:
                     entry_price=future_data_2["Close"].iloc[i],
                     quantity=(100/future_data_2["Close"].iloc[i]),
                 )    
-                logger.info(f"Short")
+                logger.info(f"SHORT")
             elif signal == "Exit" and buy:     
                 #adicionar correlated pair
                 last_trade_1 = TradeHistory.objects.filter(
@@ -300,6 +303,310 @@ class CoIntegrationStrategy:
         return f"Backtest completed for {ticker_1} and {ticker_2} pairs ({start_date} - {end_date})."                                 
 
 
+    def execution(self, correlated_pair,start_date, end_date=date.today()):
+
+
+        
+        last_action = ""
+        symbol_1 = correlated_pair.symbol_1
+        symbol_2 = correlated_pair.symbol_2
+
+        is_avaliable_1 = symbol_1.slot_free ==True #slottfree
+        is_avaliable_2 = symbol_2.slot_free ==True #slottfree 
+
+        strategy_symbol_1_pair = StrategySymbol.objects.get(symbol=symbol_1 , correlated_pair=correlated_pair)
+        strategy_symbol_2_pair = StrategySymbol.objects.get(symbol=symbol_2 , correlated_pair=correlated_pair)
+
+        buy = strategy_symbol_1_pair.slot_free != True or strategy_symbol_2_pair.slot_free != True        
+
+        DailyPriceManager.insert_daily_price(symbol_1.ticker,"2013-01-01")
+        DailyPriceManager.insert_daily_price(symbol_2.ticker,"2013-01-01")
+        historical_data_1 = DailyPrice.objects.filter(
+            symbol=symbol_1, price_date__range=[start_date, end_date]
+        ).order_by("price_date")
+
+        historical_data_2 = DailyPrice.objects.filter(
+            symbol=symbol_2, price_date__range=[start_date, end_date]
+        ).order_by("price_date")        
+
+        if not historical_data_1.exists() or not historical_data_2.exists() or len(historical_data_1)!=len(historical_data_2) :
+          
+            return f"No data found"     
+ 
+        # Convert to DataFrame
+        df_1 = pd.DataFrame.from_records(
+            historical_data_1.values(
+                "price_date", "open_price", "high_price", "low_price", "close_price", "volume"
+            )
+        )
+        df_1.rename(
+            columns={
+                "price_date": "Date",
+                "open_price": "Open",
+                "high_price": "High",
+                "low_price": "Low",
+                "close_price": "Close",
+                "volume": "Volume",
+            },
+            inplace=True,
+        )
+
+        df_2 = pd.DataFrame.from_records(
+            historical_data_2.values(
+                "price_date", "open_price", "high_price", "low_price", "close_price", "volume"
+            )
+        )
+        df_2.rename(
+            columns={
+                "price_date": "Date",
+                "open_price": "Open",
+                "high_price": "High",
+                "low_price": "Low",
+                "close_price": "Close",
+                "volume": "Volume",
+            },
+            inplace=True,
+        )                
+
+        S1 = df_1['Close']
+        S2 = df_2['Close']
+
+        S1 = pd.to_numeric(S1, errors='coerce')
+        S2 = pd.to_numeric(S2, errors='coerce')
+
+    
+        
+        S1 = sm.add_constant(S1)
+        
+        results = sm.OLS(S2, S1).fit()
+        
+        S1 = df_1['Close']
+    
+        b = results.params["Close"]
+        
+        Z= S2 - b * S1
+        
+
+        last_trade_1 = TradeHistoryExec.objects.filter(
+                symbol=symbol_1, strategy=strategy_symbol_1_pair.strategy
+            ).order_by('-created_at').first() 
+                     
+        last_trade_2 = TradeHistoryExec.objects.filter(
+                symbol=symbol_2, strategy=strategy_symbol_2_pair.strategy
+            ).order_by('-created_at').first()                      
+        
+
+        if (last_trade_2 and  last_trade_2.action =="LONG") or (last_trade_1 and  last_trade_1.action =="SHORT"):
+            last_action="LONG"
+
+        elif (last_trade_2 and  last_trade_2.action =="SHORT") or (last_trade_1 and  last_trade_1.action =="LONG"):
+            last_action="SHORT"
+
+        elif (last_trade_2 and last_trade_2.action =="EXIT") or (last_trade_1 and last_trade_1.action =="EXIT"):
+            last_action="EXIT"            
+        
+        signal = self.execute(df_1,df_2,Z, buy, last_action)
+        
+        is_pair_trading = strategy_symbol_1_pair.is_active_long and strategy_symbol_1_pair.is_active_short and strategy_symbol_2_pair.is_active_long and strategy_symbol_2_pair.is_active_short
+
+        is_pair_trading_active = strategy_symbol_1_pair.slot_free and strategy_symbol_2_pair.slot_free
+
+
+
+        
+        if signal == "LONG"  and not buy:
+            
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                
+                if(is_pair_trading and is_pair_trading_active):
+                    action="PAIR_TRADING"
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2
+                    bet_size = (ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2   
+                else:
+                    action = "SHORT"    
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100 
+
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol_1_pair.strategy,
+                    correlated_pair=correlated_pair,
+                    symbol=symbol_1,
+                    entry_date=df_1["Date"].iloc[-1],
+                    action="SHORT",
+                    entry_price=df_1["Close"].iloc[-1],                    
+                    quantity=quantity,
+                    bet_size=bet_size 
+                )   
+
+                strategy_symbol_1_pair.slot_free=False
+                symbol_1.slot_free=False
+                strategy_symbol_1_pair.save()
+                symbol_1.save()
+
+            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_long and not is_pair_trading) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+
+                if(is_pair_trading and is_pair_trading_active):
+                    action="PAIR_TRADING"
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2
+                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2
+                else:
+                    action = "LONG"  
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100 
+
+                TradeHistoryExec.objects.create(
+                    strategy = strategy_symbol_2_pair.strategy,
+                    correlated_pair=correlated_pair,
+                    symbol=symbol_2,
+                    entry_date=df_2["Date"].iloc[-1],
+                    action="LONG",
+                    entry_price=df_2["Close"].iloc[-1],                    
+                    quantity=quantity,
+                    bet_size=bet_size                       
+                )   
+
+                strategy_symbol_2_pair.slot_free=False
+                symbol_2.slot_free=False
+                strategy_symbol_2_pair.save()
+                symbol_2.save()
+                
+                
+
+        elif signal == "SHORT"  and not buy:
+
+            
+            
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+
+                if(is_pair_trading and is_pair_trading_active):
+                    action="PAIR_TRADING"
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2
+                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2                  
+                else:
+                    action = "LONG"              
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100      
+
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol_1_pair.strategy,
+                    correlated_pair=correlated_pair,
+                    symbol=symbol_1,
+                    entry_date=df_1["Date"].iloc[-1],
+                    action="LONG",
+                    entry_price=df_1["Close"].iloc[-1],
+                    quantity=quantity,
+                    bet_size=bet_size
+                )   
+
+                strategy_symbol_1_pair.slot_free=False
+                symbol_1.slot_free=False
+                strategy_symbol_1_pair.save()
+                symbol_1.save()
+
+            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_short and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+
+                if(is_pair_trading and is_pair_trading_active):
+                    action="PAIR_TRADING"
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2
+                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2                      
+                else:
+                    action = "SHORT"                       
+                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100                      
+
+                TradeHistoryExec.objects.create(
+                    strategy = strategy_symbol_2_pair.strategy,
+                    correlated_pair=correlated_pair,
+                    symbol=symbol_2,
+                    entry_date=df_2["Date"].iloc[-1],
+                    action="SHORT",
+                    entry_price=df_2["Close"].iloc[-1],
+                    quantity=quantity,
+                    bet_size=bet_size
+                )   
+
+                strategy_symbol_2_pair.slot_free=False
+                symbol_2.slot_free=False
+                strategy_symbol_2_pair.save()
+                symbol_2.save()
+
+
+        elif signal == "Exit" and buy:     
+            #Isto pode dar conflito se por alguma razao decidir desaticvar um estrategia que ja tenha dados
+            last_trade_1 = TradeHistoryExec.objects.filter(
+                strategy=strategy_symbol_1_pair.strategy, symbol=symbol_1, correlated_pair=correlated_pair, exit_date__isnull=True
+            ).order_by("-entry_date").first()        
+
+            last_trade_2 = TradeHistoryExec.objects.filter(
+                strategy=strategy_symbol_2_pair.strategy, correlated_pair=correlated_pair, symbol=symbol_2, exit_date__isnull=True
+            ).order_by("-entry_date").first()               
+
+            if last_trade_1:
+
+                exit_price_1 = df_1["Close"].iloc[-1]
+                profit_loss_1 = (
+                    (exit_price_1 - last_trade_1.entry_price) * last_trade_1.quantity
+                    if last_trade_1.action == "LONG"
+                    else (last_trade_1.entry_price - exit_price_1) * last_trade_1.quantity
+                )
+
+                last_trade_1.exit_date = df_1["Date"].iloc[-1]
+                last_trade_1.exit_price = exit_price_1
+                last_trade_1.profit_loss = profit_loss_1
+                last_trade_1.save()
+
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol_1_pair.strategy,
+                    symbol=symbol_1,
+                    correlated_pair=correlated_pair,
+                    entry_date=last_trade_1.entry_date,
+                    exit_date=df_1["Date"].iloc[-1],
+                    action="EXIT",
+                    entry_price=last_trade_1.entry_price,
+                    exit_price=exit_price_1,
+                    quantity=last_trade_1.quantity,
+                    profit_loss=profit_loss_1,
+                    bet_size=last_trade_1.bet_size
+                    
+                )  
+                strategy_symbol_1_pair.slot_free = True        
+                symbol_1.slot_free=True
+                         
+
+            if last_trade_2:
+                exit_price_2 = df_2["Close"].iloc[-1]
+                profit_loss_2 = (
+                    (exit_price_2 - last_trade_2.entry_price) * last_trade_2.quantity
+                    if last_trade_2.action == "LONG"
+                    else (last_trade_2.entry_price - exit_price_2) * last_trade_2.quantity
+                )
+
+                last_trade_2.exit_date = df_2["Date"].iloc[-1]
+                last_trade_2.exit_price = exit_price_2
+                last_trade_2.profit_loss = profit_loss_2
+                last_trade_2.save()
+                
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol_2_pair.strategy,
+                    symbol=symbol_2,
+                    correlated_pair=correlated_pair,
+                    entry_date=last_trade_2.entry_date,
+                    exit_date=df_2["Date"].iloc[-1],
+                    action="EXIT",
+                    entry_price=last_trade_2.entry_price,
+                    exit_price=exit_price_2,
+                    quantity=last_trade_2.quantity,
+                    profit_loss=profit_loss_2,
+                    bet_size=last_trade_2.bet_size
+                    
+                ) 
+            
+                strategy_symbol_2_pair.slot_free = True        
+                symbol_2.slot_free=True            
+            
+
+
+
 class MeanRevertingStrategy:
     def __init__(self, parameters):
         self.parameters = parameters
@@ -321,15 +628,15 @@ class MeanRevertingStrategy:
             return "None"  # Only trade if stationary
 
         if not buy and df["ratio"].iloc[-1] <= p[0]:
-            return "Long"
+            return "LONG"
 
         elif not buy and df["ratio"].iloc[-1] >= p[-1]:
-            return "Short"
+            return "SHORT"
 
-        elif buy and df["ratio"].iloc[-1] >= p[2] and last_action == "Long":
+        elif buy and df["ratio"].iloc[-1] >= p[2] and last_action == "LONG":
             return "Exit"
 
-        elif buy and df["ratio"].iloc[-1] <= p[2] and last_action == "Short":
+        elif buy and df["ratio"].iloc[-1] <= p[2] and last_action == "SHORT":
             return "Exit"
 
         return "None"
@@ -395,9 +702,9 @@ class MeanRevertingStrategy:
                 if current_high_price > highest_price:
                     highest_price = current_high_price
 
-            if signal == "Long" and not buy:
+            if signal == "LONG" and not buy:
                 buy = True
-                last_action = "Long"
+                last_action = "LONG"
                 lowest_price = future_data["Close"].iloc[i]
                 highest_price = future_data["Close"].iloc[i]
                 entry_price = future_data["Close"].iloc[i] 
@@ -410,9 +717,9 @@ class MeanRevertingStrategy:
                     quantity=(100/future_data["Close"].iloc[i]),
                 )
 
-            elif signal == "Short" and not buy:
+            elif signal == "SHORT" and not buy:
                 buy = True
-                last_action = "Short"
+                last_action = "SHORT"
                 lowest_price = future_data["Close"].iloc[i]
                 highest_price = future_data["Close"].iloc[i]      
                 entry_price = future_data["Close"].iloc[i]          
@@ -469,16 +776,16 @@ class MeanRevertingStrategy:
         return f"Backtest completed for {ticker} ({start_date} - {end_date})."
 
 
-    def execution(self, ticker, start_date,is_active_long,is_active_short, end_date=date.today()):
-        buy = False #slottfree
-        last_action = "" #if not slot free what is the last action
-        print(ticker)
-        # Fetch symbol
-        try:
-            symbol = Symbols.objects.get(ticker=ticker)
-        except Symbols.DoesNotExist:
-            return f"Symbol {ticker} not found in database."
+    def execution(self, strategy_symbol,symbol,is_active_long,is_active_short,start_date, end_date=date.today()):
+        #todo - if the entry signal is still valid for the 4 or 3 previous days skip
+        print(symbol.ticker)
+        is_avaliable = symbol.slot_free ==True #slottfree
 
+        buy = strategy_symbol.slot_free != True
+        
+        ticker=symbol.ticker
+        
+        DailyPriceManager.insert_daily_price(symbol.ticker,"2013-01-01")
         # Fetch historical price data
         historical_data = DailyPrice.objects.filter(
             symbol=symbol, price_date__range=[start_date, end_date]
@@ -504,3 +811,88 @@ class MeanRevertingStrategy:
             },
             inplace=True,
         )
+
+        last_trade = TradeHistoryExec.objects.filter(
+                symbol=symbol, strategy=strategy_symbol.strategy
+            ).order_by('-created_at').first() 
+        if last_trade:
+            last_action = last_trade.action   
+        else:
+            last_action = ""                
+        
+        signal = self.execute(df, buy, last_action)
+
+        if signal == "LONG" and not buy and is_avaliable and is_active_long:
+          
+            TradeHistoryExec.objects.create(
+                strategy=strategy_symbol.strategy,
+                symbol=symbol,
+                entry_date=df["Date"].iloc[-1],
+                action="LONG",
+                entry_price=df["Close"].iloc[-1],
+                quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1]),
+                bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
+            )      
+
+            symbol.slot_free = False  
+            strategy_symbol.slot_free = False
+            symbol.save()
+            strategy_symbol.save()
+
+
+        elif signal == "SHORT" and not buy and is_avaliable and is_active_short:
+          
+            TradeHistoryExec.objects.create(
+                strategy=strategy_symbol.strategy,
+                symbol=symbol,
+                entry_date=df["Date"].iloc[-1],
+                action="SHORT",
+                entry_price=df["Close"].iloc[-1],
+                quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1]),
+                bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
+            )      
+
+            symbol.slot_free = False  
+            strategy_symbol.slot_free = False
+            symbol.save()
+            strategy_symbol.save()         
+
+        elif signal == "Exit" and buy:
+            # Fetch the last open trade from the database
+            last_trade = TradeHistoryExec.objects.filter(
+                strategy=strategy_symbol.strategy, symbol=symbol, exit_date__isnull=True
+            ).order_by("-entry_date").first()
+
+            if last_trade:
+                exit_price = df["Close"].iloc[-1]
+                profit_loss = (
+                    (exit_price - last_trade.entry_price) * last_trade.quantity
+                    if last_trade.action == "LONG"
+                    else (last_trade.entry_price - exit_price) * last_trade.quantity
+                )
+
+                # Update last trade with exit details
+                last_trade.exit_date = df["Date"].iloc[-1]
+                last_trade.exit_price = exit_price
+                last_trade.profit_loss = profit_loss                
+                last_trade.save()
+
+                # Create a new record for the exit action
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol.strategy,
+                    symbol=symbol,
+                    entry_date=last_trade.entry_date,
+                    exit_date=df["Date"].iloc[-1],
+                    action="EXIT",
+                    entry_price=last_trade.entry_price,
+                    exit_price=exit_price,
+                    quantity=last_trade.quantity,
+                    profit_loss=profit_loss,
+                    bet_size=last_trade.bet_size
+                    
+                )    
+
+                strategy_symbol.slot_free = True        
+                symbol.slot_free=True
+                symbol.save()
+                strategy_symbol.save()

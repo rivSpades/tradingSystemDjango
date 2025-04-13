@@ -14,9 +14,9 @@ class StrategyAdmin(admin.ModelAdmin):
 
 @admin.register(StrategySymbol)
 class StrategySymbolAdmin(admin.ModelAdmin):
-    list_display = ("strategy", "symbol","correlated_pair", "is_active_long","is_active_short", "created_at")
+    list_display = ("strategy", "symbol","correlated_pair", "is_active_long","is_active_short","slot_free", "created_at")
     list_filter = ("strategy", "is_active_long","is_active_short")
-    search_fields = ("strategy__name", "symbol__ticker")
+    search_fields = ("strategy__name", "symbol__ticker","correlated_pair__symbol_1__ticker", "correlated_pair__symbol_2__ticker")
 
 
 @admin.register(CorrelatedPair)

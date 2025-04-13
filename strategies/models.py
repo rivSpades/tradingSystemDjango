@@ -49,7 +49,7 @@ class StrategySymbol(models.Model):
     symbol = models.ForeignKey(Symbols, on_delete=models.CASCADE)
     is_active_long = models.BooleanField(default=False)  # Active for LONG trades
     is_active_short = models.BooleanField(default=False)  # Active for SHORT trades
-    
+    slot_free = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

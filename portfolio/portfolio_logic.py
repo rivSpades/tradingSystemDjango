@@ -25,10 +25,10 @@ def analyze_and_enable_strategies(backtest):
             total_profit_loss = pair_stat.profit_loss
 
             pair_trading_is_eligible = (
-                5 <= avg_roi_per_trade < 1000 and
+                10 <= avg_roi_per_trade < 1000 and
                 avg_holding_period <= 70 and
-                total_trades >=3 and
-                win_rate >= 80 and
+                total_trades >=5 and
+                win_rate >= 90 and
                 total_profit_loss > 0
             )
 

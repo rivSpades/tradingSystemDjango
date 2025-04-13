@@ -1,17 +1,19 @@
 from django.db import models
 from symbols.models import Symbols
-from strategies.models import CorrelatedPair
+from strategies.models import CorrelatedPair,Strategy
 from django.utils import timezone
 
-class TradeHistory(models.Model):
+class TradeHistoryExec(models.Model):
     """ Stores individual trade executions. """
     symbol = models.ForeignKey(Symbols, on_delete=models.CASCADE)  
+    strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE)  
     correlated_pair = models.ForeignKey(CorrelatedPair, null=True, blank=True, on_delete=models.SET_NULL)  # NEW: Link to correlated pair
     entry_date = models.DateField()  
     exit_date = models.DateField(null=True, blank=True)  
     action = models.CharField(max_length=5, choices=[("LONG", "LONG"), ("SHORT", "SHORT"), ("EXIT", "EXIT")])  
     entry_price = models.FloatField()  
     exit_price = models.FloatField(null=True, blank=True)  
+    bet_size = models.FloatField(null=True, blank=True)  
     quantity =models.FloatField()  
     profit_loss = models.FloatField(null=True, blank=True)  
     created_at = models.DateTimeField(default=timezone.now)
