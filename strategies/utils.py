@@ -6,6 +6,8 @@ import numpy as np
 import statsmodels.tsa.stattools as ts
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from hurst import compute_Hc
+from scipy.signal import argrelextrema
+from scipy.signal import find_peaks
 
 # STRATEGY_CLASSES = {
 #     "mean-reverting": MeanRevertingStrategy,
@@ -95,7 +97,7 @@ class StrategyUtils:
         if df.empty or 'Close' not in df.columns:
             return df
 
-        df['MA_' + str(n)] = df['Close'].rolling(n, min_periods=n).mean()
+        df['MA_' + str(n)] = df['Close'].rolling(int(n), min_periods=int(n)).mean()
         return df
     @staticmethod
     def calculate_ratio(df):
@@ -217,3 +219,83 @@ class StrategyUtils:
 
                 if created:
                     print(f"Saved: {symbol1_ticker} & {symbol2_ticker} (Corr: {correlation})")
+
+    @staticmethod
+    def peak_finder(df, column, p=0.50):
+        """
+        Identifies peaks and valleys in the given DataFrame and adds 'peak_max' and 'peak_min' columns.
+
+        Parameters:
+        df (pd.DataFrame): DataFrame containing market data.
+        column (str): The column name to analyze for peaks and valleys.
+        p (float): Percentile threshold for filtering significant peaks and valleys.
+
+        Returns:
+        pd.DataFrame: Updated DataFrame with 'peak_max' and 'peak_min' columns.
+        """
+        # Identify local maxima (peaks)
+        localmax = find_peaks(df[column].values)[0]
+
+        # Identify local minima (valleys) by inverting the signal
+        localmin = find_peaks(-df[column].values)[0]
+
+        # Create DataFrames for peaks and valleys
+        df_peaks = pd.DataFrame({'date': df.iloc[localmax]['Date'], 'zigzag_y': df.iloc[localmax][column]})
+        df_valleys = pd.DataFrame({'date': df.iloc[localmin]['Date'], 'zigzag_y': df.iloc[localmin][column]})
+
+        # Combine and sort by date
+        df_peaks_valleys = pd.concat([df_peaks, df_valleys], ignore_index=True).sort_values(by='date')
+
+        # Apply separate threshold filtering
+        threshold_max = df_peaks['zigzag_y'].quantile(p)   # Top percentile for peaks
+        threshold_min = df_valleys['zigzag_y'].quantile(1 - p)  # Bottom percentile for valleys
+
+        # Filter significant peaks and valleys
+        filtered_peaks = df_peaks[df_peaks['zigzag_y'] > threshold_max]
+        filtered_valleys = df_valleys[df_valleys['zigzag_y'] < threshold_min]
+
+        # Extract dates of significant peaks and valleys
+        valuesmax_dates = filtered_peaks['date'].tolist()
+        valuesmin_dates = filtered_valleys['date'].tolist()
+
+        # Assign peak and valley indicators
+        df['peak_max'] = df['Date'].apply(lambda x: 1 if x in valuesmax_dates else -1)  # 1 for peaks
+        df['peak_min'] = df['Date'].apply(lambda x: 1 if x in valuesmin_dates else -1)  # -1 for valleys
+
+        return df
+    
+    @staticmethod    
+    def get_ma_slope(df, ma_column, window=5):
+        """
+        Calculates the slope of a moving average over a specified window.
+
+        Parameters:
+        - df: DataFrame containing the moving average column.
+        - ma_column: Column name for the moving average (e.g., 'MA_60').
+        - window: Number of periods over which to calculate the slope.
+
+        Returns:
+        - A Pandas Series of slope values.
+        """
+        # Ensure numeric
+        df = df.copy()
+        df[ma_column] = pd.to_numeric(df[ma_column], errors='coerce')
+
+        # Calculate slope: (MA_now - MA_n_periods_ago) / window
+        slope = df[ma_column].diff(periods=window) / window
+
+        return slope 
+       
+    @staticmethod        
+    def is_slope_strong(slope_series, lookback=5):
+        """
+        Flags True only if all recent slopes in the window are positive.
+        
+        Parameters:
+        - slope_series: pd.Series of slope values (from get_ma_slope)
+        - lookback: number of periods to look back
+        
+        Returns:
+        - pd.Series of booleans (True = strong trend, False = weak/mixed)
+        """
+        return slope_series.rolling(window=lookback).apply(lambda x: (x > 0).all(), raw=True).astype(bool)    

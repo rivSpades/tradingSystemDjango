@@ -5,7 +5,7 @@ from symbols.models import Symbols,Exchange
 import numpy as np
 from django.db.models import Avg, Count, Sum, F,Q
 from .models import BackTestingStrategy,StrategyStatistics,SymbolStatistics,TradeHistory
-from strategies.strategy_logic import MeanRevertingStrategy,CoIntegrationStrategy
+from strategies.strategy_logic import MeanRevertingStrategy,CoIntegrationStrategy,MACrossoverStrategy
 from strategies.models import StrategySymbol,CorrelatedPair
 from collections import defaultdict
 # Setup logging
@@ -53,6 +53,27 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
                 logger.info(f"Running backtest for {symbol.ticker}...")
                 result = strategy_logic.backtest(backtest, symbol.ticker, start_date, end_date)
                 logger.info(result)
+
+        elif strategy.slug == "ma-crossover":
+
+            # Fetch symbols based on the provided list or all symbols
+            if symbol_list:
+                symbols = Symbols.objects.filter(ticker__in=symbol_list)
+            else:
+                symbols = Symbols.objects.all()
+
+            if not symbols.exists():
+                logger.warning("No symbols found for backtesting.")
+                return "No symbols available for backtesting."
+
+            # Instantiate the strategy logic
+            strategy_logic = MACrossoverStrategy(strategy.parameters)
+
+            # Loop through selected symbols and execute backtest
+            for symbol in symbols:
+                logger.info(f"Running backtest for {symbol.ticker}...")
+                result = strategy_logic.backtest(backtest, symbol.ticker, start_date, end_date)
+                logger.info(result)                
 
         elif strategy.slug == "cointegration":  
             if exchange_name:
@@ -220,7 +241,7 @@ def calculate_symbol_statistics(backtest):
 
                 logger.info(f"Calculated Pair Trading stats for {pair}")
 
-    elif backtest.strategy.slug=="mean-reverting":
+    else:
         symbols = TradeHistory.objects.filter(backtest=backtest).values_list('symbol', flat=True).distinct()
 
         for symbol in symbols:

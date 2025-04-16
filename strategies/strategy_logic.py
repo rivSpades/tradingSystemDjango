@@ -896,3 +896,191 @@ class MeanRevertingStrategy:
                 symbol.slot_free=True
                 symbol.save()
                 strategy_symbol.save()
+
+
+class MACrossoverStrategy:
+    def __init__(self, parameters):
+        self.parameters = parameters
+        self.ma_long_window = "200"
+        self.ma_short_window = "60"
+        self.wait_ma_crossed = False
+        self.initial_perc_diff=False
+        self.peak_found=False
+        self.last_short_ma=False
+
+    def execute(self, df, buy=False, last_action=""):
+
+        if 'MA_'+self.ma_short_window in df.columns:
+            df.drop(columns=['MA_'+self.ma_short_window, 'MA_'+self.ma_long_window,'peak_min','peak_max',"slope","strong_slope"], inplace=True)
+
+        df = StrategyUtils.moving_average(df,self.ma_short_window)
+        df = StrategyUtils.moving_average(df,self.ma_long_window)    
+        df = StrategyUtils.peak_finder(df, 'MA_'+self.ma_short_window,0.95)        
+        df['slope'] =StrategyUtils.get_ma_slope(df, ma_column='MA_'+self.ma_short_window)
+        df['strong_slope'] = StrategyUtils.is_slope_strong(df['slope'], lookback=5)        
+
+        if self.wait_ma_crossed==True and  (df['MA_'+self.ma_short_window].iloc[-1]<=(df['MA_'+self.ma_long_window].iloc[-1])):
+            self.wait_ma_crossed= False   
+
+        if buy==False and not self.initial_perc_diff and df['MA_'+self.ma_short_window].iloc[-1]>df['MA_'+self.ma_long_window].iloc[-1] :
+            self.initial_perc_diff = (df["Close"].iloc[-1] -df['MA_'+self.ma_long_window].iloc[-1])/df['MA_'+self.ma_long_window].iloc[-1]    
+
+        elif  df['MA_'+self.ma_short_window].iloc[-1]< df['MA_'+self.ma_long_window].iloc[-1]  :
+            self.initial_perc_diff = False
+            self.last_short_ma = False              
+
+        if self.initial_perc_diff and df['peak_max'].iloc[-10:].eq(1).any():
+            self.peak_found = True
+        else:
+            self.peak_found=False                   
+
+
+
+        if  buy==False and df['MA_'+self.ma_short_window].iloc[-1]>(df['MA_'+self.ma_long_window].iloc[-1] )  and not self.peak_found and not StrategyUtils.check_stationary(df) and df["strong_slope"].iloc[-1]  and df["Low"].iloc[-1]> df['MA_'+self.ma_short_window].iloc[-1] and  df["Low"].iloc[-1]> df['MA_'+self.ma_long_window].iloc[-1] and (df["Close"].iloc[-1] - df['MA_'+self.ma_long_window].iloc[-1])/df['MA_'+self.ma_long_window].iloc[-1] > 0.10 and (df["Close"].iloc[-1] -df['MA_'+self.ma_long_window].iloc[-1])/df['MA_'+self.ma_long_window].iloc[-1]> self.initial_perc_diff  and df['MA_'+self.ma_short_window].iloc[-1] > self.last_short_ma:            
+            return "LONG"
+        
+        elif buy==True and   (df['MA_'+self.ma_short_window].iloc[-1]<df['MA_'+self.ma_long_window].iloc[-1] or df['peak_max'].iloc[-2:].eq(1).any() )  and last_action=="LONG":
+            
+            if df['peak_max'].iloc[-2:].eq(1).any():
+                self.wait_ma_crossed=True            
+
+            if self.initial_perc_diff and df["Close"].iloc[-1] -df['MA_'+self.ma_long_window].iloc[-1] > self.initial_perc_diff :
+                self.initial_perc_diff = (df["Close"].iloc[-1] -df['MA_'+self.ma_long_window].iloc[-1])/df['MA_'+self.ma_long_window].iloc[-1] 
+
+            if self.initial_perc_diff  and self.last_short_ma:
+                self.last_short_ma = df['MA_'+self.ma_short_window].iloc[-1]  
+
+            return "Exit" 
+        else:
+            return "None"                                            
+        
+
+    def backtest(self, backtest, ticker, start_date, end_date=date.today()):
+        """
+        Simulates market data updates by looping through future data,
+        making trade decisions at each step.
+        """
+        buy = False
+        last_action = ""
+        print(ticker)
+        # Fetch symbol
+        try:
+            symbol = Symbols.objects.get(ticker=ticker)
+        except Symbols.DoesNotExist:
+            return f"Symbol {ticker} not found in database."
+        
+        #DailyPriceManager.insert_daily_price(symbol.ticker,"2013-01-01")
+        # Fetch historical price data
+        historical_data = DailyPrice.objects.filter(
+            symbol=symbol, price_date__range=[start_date, end_date]
+        ).order_by("price_date")
+
+        if not historical_data.exists():
+            return f"No data found for {ticker} between {start_date} and {end_date}."
+
+        # Convert to DataFrame
+        df = pd.DataFrame.from_records(
+            historical_data.values(
+                "price_date", "open_price", "high_price", "low_price", "close_price", "volume"
+            )
+        )
+        df.rename(
+            columns={
+                "price_date": "Date",
+                "open_price": "Open",
+                "high_price": "High",
+                "low_price": "Low",
+                "close_price": "Close",
+                "volume": "Volume",
+            },
+            inplace=True,
+        )
+
+        
+        # Split Data
+        current_data, future_data = StrategyUtils.train_test_split(df, split_ratio=0.25)
+
+        # Backtest loop
+        for i in range(len(future_data.index)):
+            # Append new data
+            current_data = pd.concat([current_data, pd.DataFrame(future_data.iloc[i]).transpose()], axis=0)
+
+            # Check for signals
+            signal = self.execute(current_data, buy, last_action)
+
+            if buy:
+                current_low_price = future_data['Low'].iloc[i]
+                current_high_price = future_data['High'].iloc[i]
+                if current_low_price < lowest_price:
+                    lowest_price = current_low_price
+
+                if current_high_price > highest_price:
+                    highest_price = current_high_price
+
+            if signal == "LONG" and not buy:
+                buy = True
+                last_action = "LONG"
+                lowest_price = future_data["Close"].iloc[i]
+                highest_price = future_data["Close"].iloc[i]
+                entry_price = future_data["Close"].iloc[i] 
+                TradeHistory.objects.create(
+                    backtest=backtest,
+                    symbol=symbol,
+                    entry_date=future_data["Date"].iloc[i],
+                    action="LONG",
+                    entry_price=future_data["Close"].iloc[i],
+                    quantity=(100/future_data["Close"].iloc[i]),
+                )
+
+            elif signal == "SHORT" and not buy:
+                buy = True
+                last_action = "SHORT"
+                lowest_price = future_data["Close"].iloc[i]
+                highest_price = future_data["Close"].iloc[i]      
+                entry_price = future_data["Close"].iloc[i]          
+                TradeHistory.objects.create(
+                    backtest=backtest,
+                    symbol=symbol,
+                    entry_date=future_data["Date"].iloc[i],
+                    action="SHORT",
+                    entry_price=future_data["Close"].iloc[i],
+                    quantity=(100/future_data["Close"].iloc[i]),
+                )
+
+            elif signal == "Exit" and buy:
+                # Fetch the last open trade from the database
+                last_trade = TradeHistory.objects.filter(
+                    backtest=backtest, symbol=symbol, exit_date__isnull=True
+                ).order_by("-entry_date").first()
+
+                if last_trade:
+                    exit_price = future_data["Close"].iloc[i]
+                    profit_loss = (
+                        (exit_price - last_trade.entry_price) * last_trade.quantity
+                        if last_trade.action == "LONG"
+                        else (last_trade.entry_price - exit_price) * last_trade.quantity
+                    )
+
+                    # Update last trade with exit details
+                    last_trade.exit_date = future_data["Date"].iloc[i]
+                    last_trade.exit_price = exit_price
+                    last_trade.profit_loss = profit_loss
+                    last_trade.max_drawdown =  (highest_price -entry_price) / entry_price * 100 if last_trade.action == "SHORT" else (entry_price - lowest_price) / entry_price * 100
+                    last_trade.save()
+
+                    # Create a new record for the exit action
+                    TradeHistory.objects.create(
+                        backtest=backtest,
+                        symbol=symbol,
+                        entry_date=last_trade.entry_date,
+                        exit_date=future_data["Date"].iloc[i],
+                        action="EXIT",
+                        entry_price=last_trade.entry_price,
+                        exit_price=exit_price,
+                        quantity=last_trade.quantity,
+                        profit_loss=profit_loss,
+                        max_drawdown= (highest_price -entry_price) / entry_price * 100 if last_trade.action == "SHORT" else (entry_price - lowest_price) / entry_price * 100
+                    )
+
+                buy = False
+                last_action = ""
