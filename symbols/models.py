@@ -13,14 +13,31 @@ class Exchange(models.Model):
         verbose_name_plural = "Exchanges"
         db_table = 'exchange'
 
+class Broker(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    api_key = models.CharField(max_length=255, null=True, blank=True)
+    secret_key = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Broker"
+        verbose_name_plural = "Brokers"
+        db_table = 'broker'
+
+
 
 class Symbols(models.Model):
     ticker = models.CharField(max_length=32, unique=True)
     exchange = models.ForeignKey(Exchange, on_delete=models.SET_NULL, null=True, blank=True)  # Updated field
+    broker = models.ForeignKey(Broker, on_delete=models.SET_NULL, null=True, blank=True)  # Updated field
     instrument = models.CharField(max_length=64)
     name = models.CharField(max_length=255, null=True, blank=True)
     created_date = models.DateTimeField(default=timezone.now)
     active = models.BooleanField(default=False)
+    long = models.BooleanField(default=False)
+    short = models.BooleanField(default=False)
     slot_free = models.BooleanField(default=True)
     def __str__(self):
         return self.ticker

@@ -11,7 +11,11 @@ from strategies.models import StrategySymbol
 from symbols.utils import DailyPriceManager
 from symbols.models import Symbols, DailyPrice
 from execution.utils import ExecutionUtils
+from backtesting.models import BackTestingStrategy
+
+import yfinance
 import statsmodels.api as sm
+
 
 logger = logging.getLogger(__name__)
 
@@ -310,9 +314,10 @@ class CoIntegrationStrategy:
         last_action = ""
         symbol_1 = correlated_pair.symbol_1
         symbol_2 = correlated_pair.symbol_2
-
-        is_avaliable_1 = symbol_1.slot_free ==True #slottfree
-        is_avaliable_2 = symbol_2.slot_free ==True #slottfree 
+        is_shortable_1 = symbol_1.short == True
+        is_shortable_2 = symbol_2.short == True
+        is_avaliable_1 = symbol_1.active ==True #slottfree
+        is_avaliable_2 = symbol_2.active ==True #slottfree 
 
         strategy_symbol_1_pair = StrategySymbol.objects.get(symbol=symbol_1 , correlated_pair=correlated_pair)
         strategy_symbol_2_pair = StrategySymbol.objects.get(symbol=symbol_2 , correlated_pair=correlated_pair)
@@ -329,6 +334,10 @@ class CoIntegrationStrategy:
             symbol=symbol_2, price_date__range=[start_date, end_date]
         ).order_by("price_date")        
 
+        #print("historical 1")
+        #print(historical_data_1)
+        #print("historical 2")
+        #print(historical_data_2)
         if not historical_data_1.exists() or not historical_data_2.exists() or len(historical_data_1)!=len(historical_data_2) :
           
             return f"No data found"     
@@ -407,7 +416,7 @@ class CoIntegrationStrategy:
         
         signal = self.execute(df_1,df_2,Z, buy, last_action)
         
-        is_pair_trading = strategy_symbol_1_pair.is_active_long and strategy_symbol_1_pair.is_active_short and strategy_symbol_2_pair.is_active_long and strategy_symbol_2_pair.is_active_short
+        is_pair_trading = strategy_symbol_1_pair.is_active_long and strategy_symbol_1_pair.is_active_short and strategy_symbol_2_pair.is_active_long and strategy_symbol_2_pair.is_active_short and is_shortable_1 and is_shortable_2
 
         is_pair_trading_active = strategy_symbol_1_pair.slot_free and strategy_symbol_2_pair.slot_free
 
@@ -415,18 +424,38 @@ class CoIntegrationStrategy:
 
         
         if signal == "LONG"  and not buy:
-            
-            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+            #print("entra no long")
+
+            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
+            TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
+            self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")
+            #calculate_symbol_statistics(backtest)
+
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
                 
+                #print("passa no long eval para short")
+                account_info = ExecutionUtils.account_info(symbol_1)                              
+                bankroll = float(account_info["equity"])
+                print(bankroll)
+
                 if(is_pair_trading and is_pair_trading_active):
                     action="PAIR_TRADING"
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2
+                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
                     bet_size = (ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2   
                 else:
                     action = "SHORT"    
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])
+                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100 
 
+
+                
+                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
+                #if not is_valid_signal:
+                #    print("not a valid signal")
+                #    return f'Not a valid signal'
+                
+                ExecutionUtils.create_order(symbol_1,quantity,"SHORT")
+            
                 TradeHistoryExec.objects.create(
                     strategy=strategy_symbol_1_pair.strategy,
                     correlated_pair=correlated_pair,
@@ -445,14 +474,27 @@ class CoIntegrationStrategy:
 
             if (is_avaliable_2 and strategy_symbol_2_pair.is_active_long and not is_pair_trading) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
 
+                account_info = ExecutionUtils.account_info(symbol_2)                              
+                bankroll = float(account_info["equity"])
+                print(bankroll)
+
                 if(is_pair_trading and is_pair_trading_active):
                     action="PAIR_TRADING"
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2
+                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2,0))
                     bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2
                 else:
                     action = "LONG"  
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])
+                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100 
+
+
+                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_2_pair.strategy,symbol=symbol_2,correlated_pair=correlated_pair)
+                #if not is_valid_signal:
+                #    print("not a valid signal")
+                #    return f'Not a valid signal'
+
+                ExecutionUtils.create_order(symbol_2,quantity,"LONG")
+
 
                 TradeHistoryExec.objects.create(
                     strategy = strategy_symbol_2_pair.strategy,
@@ -469,23 +511,41 @@ class CoIntegrationStrategy:
                 symbol_2.slot_free=False
                 strategy_symbol_2_pair.save()
                 symbol_2.save()
-                
+               
                 
 
         elif signal == "SHORT"  and not buy:
 
-            
-            
-            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+            #print("entra no short")
 
+            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
+            TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
+            self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")            
+            #calculate_symbol_statistics(backtest)
+
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                #print("passa no short eval para long")
+                
+                account_info = ExecutionUtils.account_info(symbol_1)                              
+                bankroll = float(account_info["equity"])
+                print(bankroll)
+                
                 if(is_pair_trading and is_pair_trading_active):
                     action="PAIR_TRADING"
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2
+                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
                     bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2                  
                 else:
                     action = "LONG"              
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])
+                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100      
+
+                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
+                #if not is_valid_signal:
+                    #print("not a valid signal")
+                    #return f'Not a valid signal'
+
+                ExecutionUtils.create_order(symbol_1,quantity,"LONG")
+
 
                 TradeHistoryExec.objects.create(
                     strategy=strategy_symbol_1_pair.strategy,
@@ -503,16 +563,28 @@ class CoIntegrationStrategy:
                 strategy_symbol_1_pair.save()
                 symbol_1.save()
 
-            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_short and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_short and not is_pair_trading and is_shortable_2) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                #print("passa no short eval para short")
+
+                account_info = ExecutionUtils.account_info(symbol_2)                              
+                bankroll = float(account_info["equity"])
+                print(bankroll)
 
                 if(is_pair_trading and is_pair_trading_active):
                     action="PAIR_TRADING"
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2
+                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0)/2)
                     bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2                      
                 else:
                     action = "SHORT"                       
-                    quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])
+                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100                      
+
+                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_2_pair.strategy,symbol=symbol_2,correlated_pair=correlated_pair)
+                #if not is_valid_signal:
+                #    print("not a valid signal")
+                #    return f'Not a valid signal'
+
+                ExecutionUtils.create_order(symbol_2,quantity,"SHORT")
 
                 TradeHistoryExec.objects.create(
                     strategy = strategy_symbol_2_pair.strategy,
@@ -529,7 +601,7 @@ class CoIntegrationStrategy:
                 symbol_2.slot_free=False
                 strategy_symbol_2_pair.save()
                 symbol_2.save()
-
+ 
 
         elif signal == "Exit" and buy:     
             #Isto pode dar conflito se por alguma razao decidir desaticvar um estrategia que ja tenha dados
@@ -603,7 +675,12 @@ class CoIntegrationStrategy:
             
                 strategy_symbol_2_pair.slot_free = True        
                 symbol_2.slot_free=True            
-            
+                try:
+                    ExecutionUtils.close_position(symbol_1)
+                    ExecutionUtils.close_position(symbol_2)
+
+                except:
+                    print("Error exit trade cointegration")    
 
 
 
@@ -779,8 +856,8 @@ class MeanRevertingStrategy:
     def execution(self, strategy_symbol,symbol,is_active_long,is_active_short,start_date, end_date=date.today()):
         #todo - if the entry signal is still valid for the 4 or 3 previous days skip
         print(symbol.ticker)
-        is_avaliable = symbol.slot_free ==True #slottfree
-
+        is_avaliable = symbol.active ==True
+        is_shortable = symbol.short == True
         buy = strategy_symbol.slot_free != True
         
         ticker=symbol.ticker
@@ -791,6 +868,7 @@ class MeanRevertingStrategy:
             symbol=symbol, price_date__range=[start_date, end_date]
         ).order_by("price_date")
 
+        #print(historical_data)
         if not historical_data.exists():
             return f"No data found for {ticker} between {start_date} and {end_date}."
 
@@ -812,6 +890,44 @@ class MeanRevertingStrategy:
             inplace=True,
         )
 
+        ticker = yfinance.Ticker(ticker)
+        intraday_data = ticker.history(period="1d", interval="1m")
+
+        df["Date"] = pd.to_datetime(df["Date"])
+        
+
+        #intraday_data =  yfinance.download(ticker=ticker,period="1d", interval="1m",auto_adjust=False)
+        #print("intraday_data")
+        #print(intraday_data)
+
+        if not intraday_data.empty:
+            today_date = intraday_data.index[-1].date()
+            # Build today's candle from the 1-minute bars
+            today_open = intraday_data['Open'].iloc[0]
+            today_high = intraday_data['High'].max()
+            today_low = intraday_data['Low'].min()
+            today_close = intraday_data['Close'].iloc[-1]
+            today_volume = intraday_data['Volume'].sum()
+            today_date = intraday_data.index[-1].date()
+
+            # Create a one-row DataFrame for today's candle
+            today_df = pd.DataFrame([{
+                "Date": pd.to_datetime(today_date),
+                "Open": today_open,
+                "High": today_high,
+                "Low": today_low,
+                "Close": today_close,
+                "Volume": today_volume
+            }])
+
+            if today_date not in df["Date"].dt.date.values:
+
+                df = pd.concat([df, today_df], ignore_index=True)            
+                
+
+        #print("df merged")
+        #print(df)
+        
         last_trade = TradeHistoryExec.objects.filter(
                 symbol=symbol, strategy=strategy_symbol.strategy
             ).order_by('-created_at').first() 
@@ -823,42 +939,85 @@ class MeanRevertingStrategy:
         signal = self.execute(df, buy, last_action)
 
         if signal == "LONG" and not buy and is_avaliable and is_active_long:
-          
-            TradeHistoryExec.objects.create(
-                strategy=strategy_symbol.strategy,
-                symbol=symbol,
-                entry_date=df["Date"].iloc[-1],
-                action="LONG",
-                entry_price=df["Close"].iloc[-1],
-                quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1]),
-                bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
-            )      
 
-            symbol.slot_free = False  
-            strategy_symbol.slot_free = False
-            symbol.save()
-            strategy_symbol.save()
+            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
+            TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
+            self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
+            #calculate_symbol_statistics(backtest) 
+
+            #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy_symbol.strategy,symbol)
+
+            #if not is_valid_signal:
+            #     print("not a valid signal")
+            #     return f'Not a valid signal'
+
+            account_info = ExecutionUtils.account_info(symbol)                              
+            bankroll = float(account_info["equity"])
+            print(bankroll)            
+            quantity = int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1],0))
+            try:
+                ExecutionUtils.create_order(symbol,quantity,"LONG")
+            
 
 
-        elif signal == "SHORT" and not buy and is_avaliable and is_active_short:
-          
-            TradeHistoryExec.objects.create(
-                strategy=strategy_symbol.strategy,
-                symbol=symbol,
-                entry_date=df["Date"].iloc[-1],
-                action="SHORT",
-                entry_price=df["Close"].iloc[-1],
-                quantity=((100*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1]),
-                bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
-            )      
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol.strategy,
+                    symbol=symbol,
+                    entry_date=df["Date"].iloc[-1],
+                    action="LONG",
+                    entry_price=df["Close"].iloc[-1],
+                    quantity=quantity,
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
+                )      
 
-            symbol.slot_free = False  
-            strategy_symbol.slot_free = False
-            symbol.save()
-            strategy_symbol.save()         
+                symbol.slot_free = False  
+                strategy_symbol.slot_free = False
+                symbol.save()
+                strategy_symbol.save()
+            except:
+                print("Order Failed")
+
+        elif signal == "SHORT" and not buy and is_avaliable and is_active_short and is_shortable:
+
+            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
+            TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
+            self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
+            #calculate_symbol_statistics(backtest) 
+
+            #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy_symbol.strategy,symbol)
+
+            #if not is_valid_signal:
+            #     print("not a valid signal")
+            #     return f'Not a valid signal'
+            account_info = ExecutionUtils.account_info(symbol)                              
+            bankroll = float(account_info["equity"])
+            print(bankroll)
+            quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol,signal))/df["Close"].iloc[-1],0))
+            try:
+                ExecutionUtils.create_order(symbol,quantity,"SHORT")
+
+                TradeHistoryExec.objects.create(
+                    strategy=strategy_symbol.strategy,
+                    symbol=symbol,
+                    entry_date=df["Date"].iloc[-1],
+                    action="SHORT",
+                    entry_price=df["Close"].iloc[-1],
+                    quantity=quantity,
+                    bet_size=ExecutionUtils.calc_betsize(strategy_symbol,signal)*100
+                )      
+
+                symbol.slot_free = False  
+                strategy_symbol.slot_free = False
+                symbol.save()
+                strategy_symbol.save()         
+
+            except:
+                print("Order Failed")    
 
         elif signal == "Exit" and buy:
             # Fetch the last open trade from the database
+            
+
             last_trade = TradeHistoryExec.objects.filter(
                 strategy=strategy_symbol.strategy, symbol=symbol, exit_date__isnull=True
             ).order_by("-entry_date").first()
@@ -896,6 +1055,10 @@ class MeanRevertingStrategy:
                 symbol.slot_free=True
                 symbol.save()
                 strategy_symbol.save()
+                try:
+                    ExecutionUtils.close_position(symbol)
+                except:
+                    print("Erro exiting trade mean reverting")    
 
 
 class MACrossoverStrategy:

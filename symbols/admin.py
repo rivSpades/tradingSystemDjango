@@ -1,7 +1,10 @@
 from django.contrib import admin
-from .models import Symbols,Exchange,DailyPrice  # Import your model
+from .models import Symbols, Exchange, DailyPrice,Broker
 
-# Register your model with the admin site
-admin.site.register(Symbols)
+@admin.register(Symbols)
+class SymbolsAdmin(admin.ModelAdmin):
+    search_fields = ['ticker']  # Enables search by ticker in admin
+
 admin.site.register(Exchange)
 admin.site.register(DailyPrice)
+admin.site.register(Broker)
