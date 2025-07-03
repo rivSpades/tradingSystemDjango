@@ -17,6 +17,7 @@ class Broker(models.Model):
     name = models.CharField(max_length=64, unique=True)
     api_key = models.CharField(max_length=255, null=True, blank=True)
     secret_key = models.CharField(max_length=255, null=True, blank=True)
+    endpoint = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -55,7 +56,7 @@ class DailyPrice(models.Model):
     high_price = models.FloatField()
     low_price = models.FloatField()
     close_price = models.FloatField()
-    adj_close_price = models.FloatField()
+    adj_close_price = models.FloatField(null=True, blank=True)
     volume = models.BigIntegerField()
     created_date = models.DateTimeField(default=timezone.now)
     last_updated_date = models.DateTimeField(default=timezone.now)

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def execute_strategies(end_date=None):
     
     strategy=Strategy.objects.get(slug='mean-reverting')
-    strategy_symbols = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True), strategy=strategy)
+    strategy_symbols = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True), strategy=strategy ,symbol__active=True)
     strategy_instance = MeanRevertingStrategy(strategy.parameters)
     for strategy_symbol in strategy_symbols:
                 
@@ -27,7 +27,7 @@ def execute_strategies(end_date=None):
 
     strategy=Strategy.objects.get(slug='cointegration')        
     strategy_instance = CoIntegrationStrategy(strategy.parameters)
-    correlated_pair_ids = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True),correlated_pair__isnull=False).values_list('correlated_pair', flat=True).distinct()
+    correlated_pair_ids = StrategySymbol.objects.filter(Q(is_active_long=True) | Q(is_active_short=True),correlated_pair__isnull=False, symbol__active=True , correlated_pair__symbol_1__active=True,correlated_pair__symbol_2__active=True).values_list('correlated_pair', flat=True).distinct()
     correlated_pairs = CorrelatedPair.objects.filter(id__in=correlated_pair_ids)
 
     for correlated_pair in correlated_pairs:

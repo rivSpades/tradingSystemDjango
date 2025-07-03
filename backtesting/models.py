@@ -1,14 +1,21 @@
 from django.db import models
 from strategies.models import Strategy,CorrelatedPair
-from symbols.models import Symbols
+from symbols.models import Symbols,Broker
 from django.utils import timezone
 
 class BackTestingStrategy(models.Model):
-    """ Represents a backtest session for a strategy. """
-    strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE)  
+    """Represents a backtest session for a strategy."""
+    strategy = models.ForeignKey(Strategy, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
-    parameters = models.JSONField(null=True, blank=True)    # Strategy parameters
+    parameters = models.JSONField(null=True, blank=True)  # Strategy parameters
+    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, blank=True, related_name="broker")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['strategy', 'broker'], name='unique_strategy_broker')
+        ]
+
     def __str__(self):
         return f"{self.strategy.name} Backtest"
 

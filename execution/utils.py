@@ -90,6 +90,15 @@ class ExecutionUtils:
         print(response)
 
     @staticmethod
+    def create_order_pair(symbol_1,symbol_2,quantity_1,quantity_2,action,t_id=None):
+        broker=symbol_1.broker
+        utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
+        utils.create_order_pair(symbol_1.ticker,symbol_2.ticker, quantity_1,quantity_2, action)
+        
+
+     
+
+    @staticmethod
     def close_position(symbol):
         broker=symbol.broker
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
@@ -102,3 +111,25 @@ class ExecutionUtils:
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         response = utils.get_account_info()
         return response
+    
+    @staticmethod
+    def account_bankroll(symbol):
+        broker = symbol.broker
+        utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
+        account_info = utils.get_account_info()
+        bankroll = float(account_info["equity"])
+        return bankroll
+    
+    @staticmethod
+    def get_last_minute_bar(symbol):
+        broker = symbol.broker
+        utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
+        df = utils.last_minute_bar(symbol.ticker)
+        return df
+    
+    @staticmethod
+    def get_daily_price(symbol, start_date, end_date=None):
+        broker = symbol.broker
+        utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
+        df = utils.get_daily_price(symbol.ticker,start_date,end_date)
+        return df    

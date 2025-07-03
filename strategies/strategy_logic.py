@@ -324,8 +324,8 @@ class CoIntegrationStrategy:
 
         buy = strategy_symbol_1_pair.slot_free != True or strategy_symbol_2_pair.slot_free != True        
 
-        DailyPriceManager.insert_daily_price(symbol_1.ticker,"2013-01-01")
-        DailyPriceManager.insert_daily_price(symbol_2.ticker,"2013-01-01")
+        DailyPriceManager.insert_daily_price(symbol_1,"2013-01-01")
+        DailyPriceManager.insert_daily_price(symbol_2,"2013-01-01")
         historical_data_1 = DailyPrice.objects.filter(
             symbol=symbol_1, price_date__range=[start_date, end_date]
         ).order_by("price_date")
@@ -431,86 +431,126 @@ class CoIntegrationStrategy:
             self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")
             #calculate_symbol_statistics(backtest)
 
-            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1): 
                 
-                #print("passa no long eval para short")
-                account_info = ExecutionUtils.account_info(symbol_1)                              
-                bankroll = float(account_info["equity"])
-                print(bankroll)
+                
+                try:
+                    bankroll = ExecutionUtils.account_bankroll(symbol_1)
+                    
 
-                if(is_pair_trading and is_pair_trading_active):
-                    action="PAIR_TRADING"
-                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
-                    bet_size = (ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2   
-                else:
+
                     action = "SHORT"    
-                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
+                    quantity_1=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100 
 
 
+                    
+                    #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
+                    #if not is_valid_signal:
+                    #    print("not a valid signal")
+                    #    return f'Not a valid signal'
+                    
+                    ExecutionUtils.create_order(symbol_1,quantity_1,"SHORT")
                 
-                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
-                #if not is_valid_signal:
-                #    print("not a valid signal")
-                #    return f'Not a valid signal'
+                    TradeHistoryExec.objects.create(
+                        strategy=strategy_symbol_1_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_1,
+                        entry_date=df_1["Date"].iloc[-1],
+                        action="SHORT",
+                        entry_price=df_1["Close"].iloc[-1],                    
+                        quantity=quantity_1,
+                        bet_size=bet_size 
+                    )   
+
+                    strategy_symbol_1_pair.slot_free=False
+                    symbol_1.slot_free=False
+                    strategy_symbol_1_pair.save()
+                    symbol_1.save()
                 
-                ExecutionUtils.create_order(symbol_1,quantity,"SHORT")
-            
-                TradeHistoryExec.objects.create(
-                    strategy=strategy_symbol_1_pair.strategy,
-                    correlated_pair=correlated_pair,
-                    symbol=symbol_1,
-                    entry_date=df_1["Date"].iloc[-1],
-                    action="SHORT",
-                    entry_price=df_1["Close"].iloc[-1],                    
-                    quantity=quantity,
-                    bet_size=bet_size 
-                )   
+                except:                    
+                    print("ERROR creating order")
 
-                strategy_symbol_1_pair.slot_free=False
-                symbol_1.slot_free=False
-                strategy_symbol_1_pair.save()
-                symbol_1.save()
+            elif (is_avaliable_2 and strategy_symbol_2_pair.is_active_long and not is_pair_trading):
 
-            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_long and not is_pair_trading) or(is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                try:
+                    bankroll = ExecutionUtils.account_bankroll(symbol_2)
 
-                account_info = ExecutionUtils.account_info(symbol_2)                              
-                bankroll = float(account_info["equity"])
-                print(bankroll)
-
-                if(is_pair_trading and is_pair_trading_active):
-                    action="PAIR_TRADING"
-                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2,0))
-                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2
-                else:
                     action = "LONG"  
-                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
+                    quantity_2=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100 
 
 
-                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_2_pair.strategy,symbol=symbol_2,correlated_pair=correlated_pair)
-                #if not is_valid_signal:
-                #    print("not a valid signal")
-                #    return f'Not a valid signal'
-
-                ExecutionUtils.create_order(symbol_2,quantity,"LONG")
+                    ExecutionUtils.create_order(symbol_2,quantity_2,"LONG")
 
 
-                TradeHistoryExec.objects.create(
-                    strategy = strategy_symbol_2_pair.strategy,
-                    correlated_pair=correlated_pair,
-                    symbol=symbol_2,
-                    entry_date=df_2["Date"].iloc[-1],
-                    action="LONG",
-                    entry_price=df_2["Close"].iloc[-1],                    
-                    quantity=quantity,
-                    bet_size=bet_size                       
-                )   
+                    TradeHistoryExec.objects.create(
+                        strategy = strategy_symbol_2_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_2,
+                        entry_date=df_2["Date"].iloc[-1],
+                        action="LONG",
+                        entry_price=df_2["Close"].iloc[-1],                    
+                        quantity=quantity_2,
+                        bet_size=bet_size                       
+                    )   
 
-                strategy_symbol_2_pair.slot_free=False
-                symbol_2.slot_free=False
-                strategy_symbol_2_pair.save()
-                symbol_2.save()
+                    strategy_symbol_2_pair.slot_free=False
+                    symbol_2.slot_free=False
+                    strategy_symbol_2_pair.save()
+                    symbol_2.save()            
+
+                except:                    
+                    print("ERROR creating order")
+
+            elif (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):    
+                try:
+                    bankroll = ExecutionUtils.account_bankroll(symbol_1)
+
+                    action="PAIR_TRADING"
+
+                    quantity_1=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
+                    bet_size_1 = (ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2   
+
+                    quantity_2=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1])/2,0))
+                    bet_size_2=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2
+
+                    ExecutionUtils.create_order_pair(symbol_1,symbol_2,quantity_1,quantity_2,"LONG")
+
+                    TradeHistoryExec.objects.create(
+                        strategy=strategy_symbol_1_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_1,
+                        entry_date=df_1["Date"].iloc[-1],
+                        action="SHORT",
+                        entry_price=df_1["Close"].iloc[-1],                    
+                        quantity=quantity_1,
+                        bet_size=bet_size_1 
+                    )   
+
+                    strategy_symbol_1_pair.slot_free=False
+                    symbol_1.slot_free=False
+                    strategy_symbol_1_pair.save()
+                    symbol_1.save()
+
+                    TradeHistoryExec.objects.create(
+                        strategy = strategy_symbol_2_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_2,
+                        entry_date=df_2["Date"].iloc[-1],
+                        action="LONG",
+                        entry_price=df_2["Close"].iloc[-1],                    
+                        quantity=quantity_2,
+                        bet_size=bet_size_2                       
+                    )   
+
+                    strategy_symbol_2_pair.slot_free=False
+                    symbol_2.slot_free=False
+                    strategy_symbol_2_pair.save()
+                    symbol_2.save()  
+
+                except:                    
+                    print("ERROR creating order")
                
                 
 
@@ -523,84 +563,128 @@ class CoIntegrationStrategy:
             self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")            
             #calculate_symbol_statistics(backtest)
 
-            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading):  
                 #print("passa no short eval para long")
-                
-                account_info = ExecutionUtils.account_info(symbol_1)                              
-                bankroll = float(account_info["equity"])
-                print(bankroll)
-                
-                if(is_pair_trading and is_pair_trading_active):
-                    action="PAIR_TRADING"
-                    quantity=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
-                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2                  
-                else:
+                try:
+
+                    bankroll = ExecutionUtils.account_bankroll(symbol_1)
+                    
+
                     action = "LONG"              
-                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
+                    quantity_1=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100      
 
-                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
-                #if not is_valid_signal:
-                    #print("not a valid signal")
-                    #return f'Not a valid signal'
+                    #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_1_pair.strategy,symbol=symbol_1,correlated_pair=correlated_pair)
+                    #if not is_valid_signal:
+                        #print("not a valid signal")
+                        #return f'Not a valid signal'
 
-                ExecutionUtils.create_order(symbol_1,quantity,"LONG")
+                    ExecutionUtils.create_order(symbol_1,quantity_1,"LONG")
 
 
-                TradeHistoryExec.objects.create(
-                    strategy=strategy_symbol_1_pair.strategy,
-                    correlated_pair=correlated_pair,
-                    symbol=symbol_1,
-                    entry_date=df_1["Date"].iloc[-1],
-                    action="LONG",
-                    entry_price=df_1["Close"].iloc[-1],
-                    quantity=quantity,
-                    bet_size=bet_size
-                )   
+                    TradeHistoryExec.objects.create(
+                        strategy=strategy_symbol_1_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_1,
+                        entry_date=df_1["Date"].iloc[-1],
+                        action="LONG",
+                        entry_price=df_1["Close"].iloc[-1],
+                        quantity=quantity_1,
+                        bet_size=bet_size
+                    )   
 
-                strategy_symbol_1_pair.slot_free=False
-                symbol_1.slot_free=False
-                strategy_symbol_1_pair.save()
-                symbol_1.save()
+                    strategy_symbol_1_pair.slot_free=False
+                    symbol_1.slot_free=False
+                    strategy_symbol_1_pair.save()
+                    symbol_1.save()
 
-            if (is_avaliable_2 and strategy_symbol_2_pair.is_active_short and not is_pair_trading and is_shortable_2) or (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                except:                    
+                    print("ERROR creating order")                
+
+            elif (is_avaliable_2 and strategy_symbol_2_pair.is_active_short and not is_pair_trading and is_shortable_2):
                 #print("passa no short eval para short")
 
-                account_info = ExecutionUtils.account_info(symbol_2)                              
-                bankroll = float(account_info["equity"])
-                print(bankroll)
+                try:
+                    bankroll = ExecutionUtils.account_bankroll(symbol_1)
 
-                if(is_pair_trading and is_pair_trading_active):
-                    action="PAIR_TRADING"
-                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0)/2)
-                    bet_size=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2                      
-                else:
                     action = "SHORT"                       
-                    quantity=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
+                    quantity_2=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0))
                     bet_size=ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100                      
 
-                #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_2_pair.strategy,symbol=symbol_2,correlated_pair=correlated_pair)
-                #if not is_valid_signal:
-                #    print("not a valid signal")
-                #    return f'Not a valid signal'
+                    #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy=strategy_symbol_2_pair.strategy,symbol=symbol_2,correlated_pair=correlated_pair)
+                    #if not is_valid_signal:
+                    #    print("not a valid signal")
+                    #    return f'Not a valid signal'
 
-                ExecutionUtils.create_order(symbol_2,quantity,"SHORT")
+                    ExecutionUtils.create_order(symbol_2,quantity_2,"SHORT")
 
-                TradeHistoryExec.objects.create(
-                    strategy = strategy_symbol_2_pair.strategy,
-                    correlated_pair=correlated_pair,
-                    symbol=symbol_2,
-                    entry_date=df_2["Date"].iloc[-1],
-                    action="SHORT",
-                    entry_price=df_2["Close"].iloc[-1],
-                    quantity=quantity,
-                    bet_size=bet_size
-                )   
+                    TradeHistoryExec.objects.create(
+                        strategy = strategy_symbol_2_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_2,
+                        entry_date=df_2["Date"].iloc[-1],
+                        action="SHORT",
+                        entry_price=df_2["Close"].iloc[-1],
+                        quantity=quantity_2,
+                        bet_size=bet_size
+                    )   
 
-                strategy_symbol_2_pair.slot_free=False
-                symbol_2.slot_free=False
-                strategy_symbol_2_pair.save()
-                symbol_2.save()
+                    strategy_symbol_2_pair.slot_free=False
+                    symbol_2.slot_free=False
+                    strategy_symbol_2_pair.save()
+                    symbol_2.save()   
+
+                except:                    
+                    print("ERROR creating order")                             
+
+            elif (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):
+                
+                try:
+                    bankroll = ExecutionUtils.account_bankroll(symbol_1)
+
+                    action="PAIR_TRADING"
+                    quantity_1=int(round(((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action))/df_1["Close"].iloc[-1])/2,0))
+                    bet_size_1=(ExecutionUtils.calc_betsize(strategy_symbol_1_pair,action)*100)/2              
+                    quantity_2=int(round((bankroll*ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action))/df_2["Close"].iloc[-1],0)/2)
+                    bet_size_2=(ExecutionUtils.calc_betsize(strategy_symbol_2_pair,action)*100)/2          
+
+                    ExecutionUtils.create_order_pair(symbol_1,symbol_2,quantity_1,quantity_2,"SHORT")
+
+                    TradeHistoryExec.objects.create(
+                        strategy=strategy_symbol_1_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_1,
+                        entry_date=df_1["Date"].iloc[-1],
+                        action="LONG",
+                        entry_price=df_1["Close"].iloc[-1],
+                        quantity=quantity_1,
+                        bet_size=bet_size_1
+                    )   
+
+                    strategy_symbol_1_pair.slot_free=False
+                    symbol_1.slot_free=False
+                    strategy_symbol_1_pair.save()
+                    symbol_1.save()
+
+                    TradeHistoryExec.objects.create(
+                        strategy = strategy_symbol_2_pair.strategy,
+                        correlated_pair=correlated_pair,
+                        symbol=symbol_2,
+                        entry_date=df_2["Date"].iloc[-1],
+                        action="SHORT",
+                        entry_price=df_2["Close"].iloc[-1],
+                        quantity=quantity_2,
+                        bet_size=bet_size_2
+                    )   
+
+                    strategy_symbol_2_pair.slot_free=False
+                    symbol_2.slot_free=False
+                    strategy_symbol_2_pair.save()
+                    symbol_2.save()     
+
+                except:                    
+                    print("ERROR creating order")
+
  
 
         elif signal == "Exit" and buy:     
@@ -862,7 +946,7 @@ class MeanRevertingStrategy:
         
         ticker=symbol.ticker
         
-        DailyPriceManager.insert_daily_price(symbol.ticker,"2013-01-01")
+        DailyPriceManager.insert_daily_price(symbol,"2013-01-01")
         # Fetch historical price data
         historical_data = DailyPrice.objects.filter(
             symbol=symbol, price_date__range=[start_date, end_date]
