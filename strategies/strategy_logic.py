@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date,datetime
+
 import logging
 import numpy as np
 import pandas as pd
@@ -310,7 +311,8 @@ class CoIntegrationStrategy:
     def execution(self, correlated_pair,start_date, end_date=date.today()):
 
 
-        
+        intraday_data_1 = pd.DataFrame()
+        intraday_data_2 = pd.DataFrame()
         last_action = ""
         symbol_1 = correlated_pair.symbol_1
         symbol_2 = correlated_pair.symbol_2
@@ -375,7 +377,77 @@ class CoIntegrationStrategy:
                 "volume": "Volume",
             },
             inplace=True,
-        )                
+        )      
+        
+        df_1["Date"] = pd.to_datetime(df_1["Date"])
+        df_2["Date"] = pd.to_datetime(df_2["Date"])
+
+        last_date_1 = df_1["Date"].iloc[-1]
+        last_date_2 = df_1["Date"].iloc[-1]
+
+        today = pd.to_datetime(datetime.today().date())
+
+        if today > last_date_1:
+            intraday_data_1 = ExecutionUtils.get_last_minute_bar(symbol_1)
+
+        if today > last_date_2:
+            intraday_data_2 = ExecutionUtils.get_last_minute_bar(symbol_2)
+        
+
+
+        if not intraday_data_1.empty :
+            
+            today_date = intraday_data_1["Date"].iloc[-1]
+            # Build today's candle from the 1-minute bars
+            today_open = intraday_data_1['Open'].iloc[0]
+            today_high = intraday_data_1['High'].max()
+            today_low = intraday_data_1['Low'].min()
+            today_close = intraday_data_1['Close'].iloc[-1]
+            today_volume = intraday_data_1['Volume'].sum()
+            today_date = intraday_data_1["Date"].iloc[-1]
+
+            # Create a one-row DataFrame for today's candle
+            today_df_1 = pd.DataFrame([{
+                "Date": pd.to_datetime(today_date),
+                "Open": today_open,
+                "High": today_high,
+                "Low": today_low,
+                "Close": today_close,
+                "Volume": today_volume
+            }])
+
+            #if today_date not in df["Date"].dt.date.values:
+
+            df_1 = pd.concat([df_1, today_df_1], ignore_index=True)       
+
+        if not intraday_data_2.empty :
+            today_date = intraday_data_2["Date"].iloc[-1]
+            # Build today's candle from the 1-minute bars
+            today_open = intraday_data_2['Open'].iloc[0]
+            today_high = intraday_data_2['High'].max()
+            today_low = intraday_data_2['Low'].min()
+            today_close = intraday_data_2['Close'].iloc[-1]
+            today_volume = intraday_data_2['Volume'].sum()
+            today_date = intraday_data_2["Date"].iloc[-1]
+
+            # Create a one-row DataFrame for today's candle
+            today_df_2 = pd.DataFrame([{
+                "Date": pd.to_datetime(today_date),
+                "Open": today_open,
+                "High": today_high,
+                "Low": today_low,
+                "Close": today_close,
+                "Volume": today_volume
+            }])
+
+            #if today_date not in df["Date"].dt.date.values:
+
+            df_2 = pd.concat([df_2, today_df_2], ignore_index=True)                                      
+
+
+        if len(df_1) != len(df_2):
+            return f"Length mismatch"
+        
 
         S1 = df_1['Close']
         S2 = df_2['Close']
@@ -943,7 +1015,7 @@ class MeanRevertingStrategy:
         is_avaliable = symbol.active ==True
         is_shortable = symbol.short == True
         buy = strategy_symbol.slot_free != True
-        
+        intraday_data = pd.DataFrame()
         ticker=symbol.ticker
         
         DailyPriceManager.insert_daily_price(symbol,"2013-01-01")
@@ -974,25 +1046,29 @@ class MeanRevertingStrategy:
             inplace=True,
         )
 
-        ticker = yfinance.Ticker(ticker)
-        intraday_data = ticker.history(period="1d", interval="1m")
+        #ticker = yfinance.Ticker(ticker)
+        #intraday_data = ticker.history(period="1d", interval="1m")
 
         df["Date"] = pd.to_datetime(df["Date"])
+
+        last_date = df["Date"].iloc[-1]
+        today = pd.to_datetime(datetime.today().date())
+
+        if today > last_date:
+            intraday_data = ExecutionUtils.get_last_minute_bar(symbol)
+
         
 
-        #intraday_data =  yfinance.download(ticker=ticker,period="1d", interval="1m",auto_adjust=False)
-        #print("intraday_data")
-        #print(intraday_data)
 
-        if not intraday_data.empty:
-            today_date = intraday_data.index[-1].date()
+        if not intraday_data.empty :
+            today_date = intraday_data["Date"].iloc[-1]
             # Build today's candle from the 1-minute bars
             today_open = intraday_data['Open'].iloc[0]
             today_high = intraday_data['High'].max()
             today_low = intraday_data['Low'].min()
             today_close = intraday_data['Close'].iloc[-1]
             today_volume = intraday_data['Volume'].sum()
-            today_date = intraday_data.index[-1].date()
+            today_date = intraday_data["Date"].iloc[-1]
 
             # Create a one-row DataFrame for today's candle
             today_df = pd.DataFrame([{
@@ -1004,13 +1080,11 @@ class MeanRevertingStrategy:
                 "Volume": today_volume
             }])
 
-            if today_date not in df["Date"].dt.date.values:
+            #if today_date not in df["Date"].dt.date.values:
 
-                df = pd.concat([df, today_df], ignore_index=True)            
+            df = pd.concat([df, today_df], ignore_index=True)            
                 
 
-        #print("df merged")
-        #print(df)
         
         last_trade = TradeHistoryExec.objects.filter(
                 symbol=symbol, strategy=strategy_symbol.strategy
