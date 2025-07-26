@@ -503,7 +503,7 @@ class CoIntegrationStrategy:
             self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")
             #calculate_symbol_statistics(backtest)
 
-            if (is_avaliable_1 and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1): 
+            if (is_avaliable_1 and  symbol_1.slot_free and strategy_symbol_1_pair.slot_free and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1): 
                 
                 
                 try:
@@ -543,7 +543,7 @@ class CoIntegrationStrategy:
                 except:                    
                     print("ERROR creating order")
 
-            elif (is_avaliable_2 and strategy_symbol_2_pair.is_active_long and not is_pair_trading):
+            elif (is_avaliable_2 and symbol_2.slot_free and  strategy_symbol_2_pair.slot_free and strategy_symbol_2_pair.is_active_long and not is_pair_trading):
 
                 try:
                     bankroll = ExecutionUtils.account_bankroll(symbol_2)
@@ -575,7 +575,7 @@ class CoIntegrationStrategy:
                 except:                    
                     print("ERROR creating order")
 
-            elif (is_avaliable_1 and is_avaliable_2 and is_pair_trading and is_pair_trading_active ):    
+            elif (is_avaliable_1 and is_avaliable_2 and symbol_1.slot_free and symbol_2.slot_free and is_pair_trading and is_pair_trading_active ):    
                 try:
                     bankroll = ExecutionUtils.account_bankroll(symbol_1)
 
@@ -1099,7 +1099,7 @@ class MeanRevertingStrategy:
         
         signal = self.execute(df, buy, last_action)
 
-        if signal == "LONG" and not buy and is_avaliable and is_active_long:
+        if signal == "LONG" and not buy and symbol.slot_free and is_avaliable and is_active_long:
 
             backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
             TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
@@ -1138,7 +1138,7 @@ class MeanRevertingStrategy:
             except:
                 print("Order Failed")
 
-        elif signal == "SHORT" and not buy and is_avaliable and is_active_short and is_shortable:
+        elif signal == "SHORT" and not buy and symbol.slot_free and is_avaliable and is_active_short and is_shortable:
 
             backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
             TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
