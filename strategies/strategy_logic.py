@@ -799,7 +799,10 @@ class CoIntegrationStrategy:
                 )  
                 strategy_symbol_1_pair.slot_free = True        
                 symbol_1.slot_free=True
-                         
+                try:
+                    ExecutionUtils.close_position(symbol_1)   
+                except:
+                    print("Failed exit on symbol 1",symbol_1)          
 
             if last_trade_2:
                 exit_price_2 = df_2["Close"].iloc[-1]
@@ -832,11 +835,11 @@ class CoIntegrationStrategy:
                 strategy_symbol_2_pair.slot_free = True        
                 symbol_2.slot_free=True            
                 try:
-                    ExecutionUtils.close_position(symbol_1)
+                    
                     ExecutionUtils.close_position(symbol_2)
 
                 except:
-                    print("Error exit trade cointegration")    
+                    print("Failed exit on symbol 2",symbol_2)    
 
 
 
