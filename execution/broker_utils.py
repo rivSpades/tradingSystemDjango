@@ -108,36 +108,55 @@ class BrokerUtils:
 
         return df
 
-    def get_daily_price(self,ticker, start_date, end_date=None):
+    def get_daily_price(self,symbol, start_date, end_date=None):
 
         
         if end_date is None:
             end_date = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
-        
+        api_key_crypto='6b515a38920034e96cf7f221695cc4e16a17d7b57a6358d3a5749c2a1ed1c50e' 
+        if symbol.instrument == "CRYPTO":
+            fsym, tsym = symbol.ticker.split('-')
+            url = f'https://min-api.cryptocompare.com/data/v2/histoday?fsym={fsym}&tsym={tsym}&limit=2000&api_key={api_key_crypto}'
+            response = requests.get(url)
 
-        url = f"https://data.alpaca.markets/v2/stocks/{ticker}/bars?timeframe=1D&start={start_date}&end={end_date}&limit=10000&adjustment=raw&feed=sip&sort=asc"
-
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status() 
-
-            data = response.json()
-            
-            bars_data = data.get("bars")
-            
-            if bars_data:
-                df= self.bars_to_df(bars_data)
-                return df
+            if response.status_code == 200:
+                try:
+                    data = response.json()['Data']['Data']
+                except:
+                    print(f"Failed to fetch daily prices for {symbol} from CryptoCompare")
+                    return pd.DataFrame() 
+                prices = pd.DataFrame(data)
+                prices['time'] = pd.to_datetime(prices['time'], unit='s')
+                prices.rename(columns={'time': 'Date', 'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volumeto': 'Volume'}, inplace=True)
+                prices['Adj Close'] = prices['Close']  # For cryptocurrencies, adjusted close is typically the same as close
+                return prices[['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']][:-1]
             else:
-                print(f"No bars data found for ticker {ticker} in the specified date range.")
-                return pd.DataFrame()
+                print(f"Failed to fetch daily prices for {symbol} from CryptoCompare")
+                return pd.DataFrame()            
+        else:    
+            url = f"https://data.alpaca.markets/v2/stocks/{symbol.ticker}/bars?timeframe=1D&start={start_date}&end={end_date}&limit=10000&adjustment=raw&feed=sip&sort=asc"
 
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching data from Alpaca API: {e}")
-            return pd.DataFrame()
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return pd.DataFrame()
+            try:
+                response = requests.get(url, headers=self.headers)
+                response.raise_for_status() 
+
+                data = response.json()
+                
+                bars_data = data.get("bars")
+                
+                if bars_data:
+                    df= self.bars_to_df(bars_data)
+                    return df
+                else:
+                    print(f"No bars data found for ticker {symbol.ticker} in the specified date range.")
+                    return pd.DataFrame()
+
+            except requests.exceptions.RequestException as e:
+                print(f"Error fetching data from Alpaca API: {e}")
+                return pd.DataFrame()
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                return pd.DataFrame()
 
     def last_minute_bar(self,ticker):
         url = f"https://data.alpaca.markets/v2/stocks/{ticker}/bars/latest"
@@ -154,45 +173,80 @@ class BrokerUtils:
 
 
     def enable_assets(self):
-
-
-        url = f"{self.base_url}/v2/assets?status=active&asset_class=us_equity&attributes="
-        response = requests.get(url, headers=self.headers)
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to fetch assets from Alpaca: {response.text}")
-
-        assets = response.json()
         broker = Broker.objects.get(name=self.broker_name)
-        for asset in assets:
-            if asset.get("tradable", False):
-                symbol = asset.get("symbol")
-                name = asset.get("name", "")
-                print(symbol)
-                exchange_name = asset.get("exchange", "UNKNOWN")
-                shortable = asset.get("shortable", False)
-                # Get or create Exchange
-                exchange, _ = Exchange.objects.get_or_create(name=exchange_name)
+        if self.broker_name =="Alpaca":
+            url = f"{self.base_url}/v2/assets?status=active&asset_class=us_equity&attributes="
+            response = requests.get(url, headers=self.headers)
 
-                # Update or create Symbol
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch assets from Alpaca: {response.text}")
+
+            assets = response.json()
+            
+            for asset in assets:
+                if asset.get("tradable", False):
+                    symbol = asset.get("symbol")
+                    name = asset.get("name", "")
+                    print(symbol)
+                    exchange_name = asset.get("exchange", "UNKNOWN")
+                    shortable = asset.get("shortable", False)
+                    # Get or create Exchange
+                    exchange, _ = Exchange.objects.get_or_create(name=exchange_name)
+
+                    # Update or create Symbol
+                    symbol_obj, created = Symbols.objects.get_or_create(
+                        ticker=symbol,
+                        defaults={
+                            "instrument": "stock",
+                            "name": name,
+                            "ticker":symbol,
+                            "exchange": exchange,
+                            "active": True,
+                            "slot_free": True,
+                            "long":True,
+                            "short":shortable,
+                            "broker":broker,
+                        }
+                    )
+
+                    if not created: #means already exists
+                        symbol_obj.active = True
+                        symbol_obj.broker = broker
+                        symbol_obj.long  = True
+                        symbol_obj.short = shortable
+                        symbol_obj.save()
+
+        elif self.broker_name=="Binance":
+            url = "https://data-api.binance.vision/api/v3/exchangeInfo"
+            response = requests.get(url, headers=self.headers)
+            data = response.json()
+            
+            for symbol in data["symbols"]:
+
+                exchange_name = "CRYPTO "+symbol["quoteAsset"]
+                exchange, _ = Exchange.objects.get_or_create(name=exchange_name)   
+
+                ticker=symbol["baseAsset"]+"-"+symbol["quoteAsset"]
                 symbol_obj, created = Symbols.objects.get_or_create(
-                    ticker=symbol,
-                    defaults={
-                        "instrument": "stock",
-                        "name": name,
-                        "ticker":symbol,
-                        "exchange": exchange,
-                        "active": True,
-                        "slot_free": True,
-                        "long":True,
-                        "short":shortable,
-                        "broker":broker,
-                    }
-                )
+                ticker=ticker,
+                defaults={
+                    "instrument": "CRYPTO",
+                    "name": ticker,
+                    "ticker":ticker,
+                    "exchange": exchange,
+                    "active": symbol["isSpotTradingAllowed"] or symbol["isMarginTradingAllowed"],
+                    "slot_free": True,
+                    "long":True,
+                    "short":symbol["isMarginTradingAllowed"],
+                    "broker":broker,
+                }
+            )
 
-                if not created: #means already exists
-                    symbol_obj.active = True
-                    symbol_obj.broker = broker
-                    symbol_obj.long  = True
-                    symbol_obj.short = shortable
-                    symbol_obj.save()
+            if not created: #means already exists
+                symbol_obj.active = True
+                symbol_obj.broker = broker
+                symbol_obj.long  = True
+                symbol_obj.short = symbol["isMarginTradingAllowed"]
+                symbol_obj.save()               
+          
+         

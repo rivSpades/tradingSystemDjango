@@ -131,5 +131,5 @@ class ExecutionUtils:
     def get_daily_price(symbol, start_date, end_date=None):
         broker = symbol.broker
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
-        df = utils.get_daily_price(symbol.ticker,start_date,end_date)
+        df = utils.get_daily_price(symbol,start_date,end_date)
         return df    

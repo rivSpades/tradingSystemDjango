@@ -3,7 +3,7 @@ from .models import BackTestingStrategy, TradeHistory, StrategyStatistics, Symbo
 
 @admin.register(BackTestingStrategy)
 class BackTestingStrategyAdmin(admin.ModelAdmin):
-    list_display = ("strategy", "name","created_at")
+    list_display = ("strategy", "name","broker","created_at")
     search_fields = ("strategy__name",)
     list_filter = ("created_at",)
 

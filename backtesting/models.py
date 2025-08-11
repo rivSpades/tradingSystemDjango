@@ -13,7 +13,7 @@ class BackTestingStrategy(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['strategy', 'broker'], name='unique_strategy_broker')
+            models.UniqueConstraint(fields=['strategy','name', 'broker'], name='unique_strategy_broker')
         ]
 
     def __str__(self):
