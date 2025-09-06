@@ -498,9 +498,9 @@ class CoIntegrationStrategy:
         if signal == "LONG"  and not buy:
             #print("entra no long")
 
-            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
-            TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
-            self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")
+            #backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
+            #TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
+            #self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")
             #calculate_symbol_statistics(backtest)
 
             if (is_avaliable_1 and  symbol_1.slot_free and strategy_symbol_1_pair.slot_free and strategy_symbol_1_pair.is_active_short and not is_pair_trading and is_shortable_1): 
@@ -630,9 +630,9 @@ class CoIntegrationStrategy:
 
             #print("entra no short")
 
-            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
-            TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
-            self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")            
+            #backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol_1_pair.strategy)   
+            #TradeHistory.objects.filter(backtest=backtest, correlated_pair=correlated_pair).delete()
+            #self.backtest(backtest,symbol_1.ticker,symbol_2.ticker,start_date="2023-01-01")            
             #calculate_symbol_statistics(backtest)
 
             if (is_avaliable_1 and strategy_symbol_1_pair.is_active_long and not is_pair_trading):  
@@ -892,8 +892,9 @@ class MeanRevertingStrategy:
             return f"Symbol {ticker} not found in database."
 
         # Fetch historical price data
+        #DailyPriceManager.insert_daily_price(symbol,"2013-01-01")
         historical_data = DailyPrice.objects.filter(
-            symbol=symbol, price_date__range=[start_date, end_date]
+            symbol=symbol
         ).order_by("price_date")
 
         if not historical_data.exists():
@@ -1101,9 +1102,9 @@ class MeanRevertingStrategy:
 
         if signal == "LONG" and not buy and symbol.slot_free and is_avaliable and is_active_long:
 
-            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
-            TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
-            self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
+            #backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
+            #TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
+            #self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
             #calculate_symbol_statistics(backtest) 
 
             #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy_symbol.strategy,symbol)
@@ -1140,9 +1141,9 @@ class MeanRevertingStrategy:
 
         elif signal == "SHORT" and not buy and symbol.slot_free and is_avaliable and is_active_short and is_shortable:
 
-            backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
-            TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
-            self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
+            #backtest = BackTestingStrategy.objects.get(strategy=strategy_symbol.strategy)   
+            #TradeHistory.objects.filter(backtest=backtest, symbol=symbol).delete()
+            #self.backtest(backtest,symbol.ticker,start_date="2023-01-01")            
             #calculate_symbol_statistics(backtest) 
 
             #is_valid_signal= ExecutionUtils.last_backtest_trade_valid(strategy_symbol.strategy,symbol)

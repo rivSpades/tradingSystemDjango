@@ -105,13 +105,44 @@ class StrategyUtils:
         ma = 100
         df = StrategyUtils.moving_average(df, ma)
         
-        # Ensure numeric conversion
+        # Ensure numeric conversion with error handling
         df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
         df[f'MA_{ma}'] = pd.to_numeric(df[f'MA_{ma}'], errors='coerce')
 
-        # Calculate ratio and avoid division by zero
-        df['ratio'] = df['Close'] / df[f'MA_{ma}']
-        df['ratio'] = df['ratio'].fillna(1)
+        # Add validation to prevent underflow
+        # Check for zero or very small moving average values
+        min_ma_threshold = 1e-10  # Minimum threshold to prevent underflow
+        
+        # Replace very small or zero MA values with a safe minimum
+        df[f'MA_{ma}'] = df[f'MA_{ma}'].replace([0, np.inf, -np.inf], np.nan)
+        df[f'MA_{ma}'] = df[f'MA_{ma}'].fillna(df['Close'].mean() if not df['Close'].isna().all() else 1.0)
+        
+        # Ensure MA values are not too small
+        df[f'MA_{ma}'] = np.maximum(df[f'MA_{ma}'], min_ma_threshold)
+        
+        # Check for zero or very small close prices
+        df['Close'] = df['Close'].replace([0, np.inf, -np.inf], np.nan)
+        df['Close'] = df['Close'].fillna(df[f'MA_{ma}'].mean() if not df[f'MA_{ma}'].isna().all() else 1.0)
+        df['Close'] = np.maximum(df['Close'], min_ma_threshold)
+
+        # Calculate ratio with additional safety checks
+        try:
+            df['ratio'] = df['Close'] / df[f'MA_{ma}']
+            
+            # Handle any remaining problematic values
+            df['ratio'] = df['ratio'].replace([np.inf, -np.inf], np.nan)
+            df['ratio'] = df['ratio'].fillna(1.0)  # Default to 1.0 for problematic ratios
+            
+            # Clip extreme values to prevent overflow
+            max_ratio = 1000  # Maximum reasonable ratio
+            min_ratio = 0.001  # Minimum reasonable ratio
+            df['ratio'] = np.clip(df['ratio'], min_ratio, max_ratio)
+            
+        except Exception as e:
+            print(f"Error calculating ratio: {e}")
+            # Fallback: set all ratios to 1.0
+            df['ratio'] = 1.0
+            
         return df
 
     @staticmethod
@@ -160,9 +191,13 @@ class StrategyUtils:
 
 
     @staticmethod
-    def find_highly_correlated_pairs(exchange_name=None):
+    def find_highly_correlated_pairs(exchange_name=None, threshold=0.90):
         """
-        Finds and saves highly correlated symbol pairs (corr > 0.98) for each exchange.
+        Finds and saves highly correlated symbol pairs for each exchange.
+        
+        Args:
+            exchange_name (str, optional): Name of specific exchange to process
+            threshold (float): Correlation threshold (default: 0.90)
         """
         if exchange_name:
             exchanges = Exchange.objects.filter(name = exchange_name)  # Get all exchanges 
@@ -181,10 +216,10 @@ class StrategyUtils:
 
             # Fetch daily close prices
             price_data = {}
-            for ticker in symbol_tickers:
-                DailyPriceManager.insert_daily_price(ticker,"2013-01-01")
-                prices = DailyPrice.objects.filter(symbol__ticker=ticker).order_by('price_date').values('price_date', 'close_price')
-                price_data[ticker] = {price['price_date']: price['close_price'] for price in prices}
+            for symbol in symbols:
+                #DailyPriceManager.insert_daily_price(symbol,"2013-01-01")
+                prices = DailyPrice.objects.filter(symbol__ticker=symbol.ticker).order_by('price_date').values('price_date', 'close_price')
+                price_data[symbol.ticker] = {price['price_date']: price['close_price'] for price in prices}
 
             # Convert to DataFrame
             data = pd.DataFrame(price_data)
@@ -195,14 +230,16 @@ class StrategyUtils:
             # Calculate correlation matrix
             corr_matrix = data.corr()
 
-            # Extract pairs with correlation > 0.98
-            threshold = 0.90
+            # Extract pairs with correlation above threshold
             high_corr_pairs = [(s1, s2, round(corr_matrix.loc[s1, s2], 2))
                                for s1 in symbol_tickers for s2 in symbol_tickers
                                if s1 != s2 and corr_matrix.loc[s1, s2] > threshold and corr_matrix.loc[s1, s2] < 1.00]
 
             # Remove duplicate pairs
             unique_pairs = list(set(tuple(sorted(pair[:2])) + (pair[2],) for pair in high_corr_pairs))
+
+            pairs_found = len(unique_pairs)
+            print(f"Found {pairs_found} correlated pairs with threshold > {threshold}")
 
             # Save results to database
             for symbol1_ticker, symbol2_ticker, correlation in unique_pairs:
@@ -219,6 +256,10 @@ class StrategyUtils:
 
                 if created:
                     print(f"Saved: {symbol1_ticker} & {symbol2_ticker} (Corr: {correlation})")
+                else:
+                    print(f"Updated: {symbol1_ticker} & {symbol2_ticker} (Corr: {correlation})")
+            
+            return pairs_found
 
     @staticmethod
     def peak_finder(df, column, p=0.50):

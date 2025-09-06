@@ -10,6 +10,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from .tasks  import update_symbols,update_daily_prices
 from .serializers import SymbolSerializer
+from .utils import DailyPriceManager
 from celery.result import AsyncResult
 from django.http import JsonResponse
 from django.db.models import OuterRef, Subquery
@@ -72,14 +73,36 @@ class SymbolUpdateView(View):
     
 
 class SymbolDailyPriceUpdateView(View):
-    """Class-based view to trigger the update of daily prices asynchronously."""
+    """Class-based view to trigger the update of daily prices synchronously."""
     
     def post(self, request, *args, **kwargs):
-        # Trigger the Celery task asynchronously
-        task = update_daily_prices.delay()  # Start the task in the background
+        # Get broker name from request if provided
+        broker_name = request.POST.get('broker_name', None)
+        
+        try:
+            # Update daily prices synchronously
+            if broker_name:
+                result = DailyPriceManager.update_daily_prices_for_symbols(broker_name=broker_name)
+                print(f"Completed daily price update for {broker_name} broker")
+            else:
+                result = DailyPriceManager.update_daily_prices_for_symbols()
+                print("Completed daily price update for all brokers")
 
-        # Return the task ID in the response so the frontend can track progress
-        return JsonResponse({'task_id': task.id})
+            # Return the results
+            return JsonResponse({
+                'success': True,
+                'broker_name': broker_name,
+                'message': f"Daily price update completed for {broker_name if broker_name else 'all brokers'}",
+                'results': result
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'broker_name': broker_name,
+                'message': f"Error updating daily prices: {str(e)}",
+                'error': str(e)
+            }, status=500)
 
 
 class SymbolTaskProgressView(View):

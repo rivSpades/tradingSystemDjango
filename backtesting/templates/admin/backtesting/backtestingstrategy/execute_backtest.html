@@ -1,0 +1,226 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}{{ block.super }}
+<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+{{ form.media }}
+{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+<style>
+    .form-row {
+        margin-bottom: 20px;
+    }
+    .form-row label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .form-row input, .form-row select, .form-row textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    .form-row .help {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+    .submit-row {
+        margin-top: 30px;
+        padding: 20px 0;
+        border-top: 1px solid #eee;
+    }
+    .submit-row input {
+        background: #79aec8;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    .submit-row input:hover {
+        background: #417690;
+    }
+    .cancel-link {
+        margin-left: 10px;
+        color: #666;
+        text-decoration: none;
+        padding: 10px 15px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    .cancel-link:hover {
+        color: #333;
+        background: #f5f5f5;
+    }
+    .module {
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+    .module h2 {
+        background: #f8f9fa;
+        padding: 10px 15px;
+        margin: 0;
+        border-bottom: 1px solid #dee2e6;
+        font-size: 16px;
+    }
+    .module h3 {
+        color: #333;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    .module ul {
+        margin: 10px 0;
+        padding-left: 20px;
+    }
+    .module li {
+        margin-bottom: 5px;
+    }
+    .module strong {
+        color: #2c3e50;
+    }
+    .instructions {
+        background: #e8f4fd;
+        border-left: 4px solid #79aec8;
+        padding: 15px;
+        margin: 20px 0;
+    }
+    .instructions h2 {
+        color: #2c3e50;
+        margin-top: 0;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:backtesting_backtestingstrategy_changelist' %}">Back testing strategies</a>
+    &rsaquo; Execute Backtest
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>🚀 Execute Backtest</h1>
+    
+    <div class="module aligned">
+        <form method="post">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+                <div class="errornote">
+                    Please correct the errors below.
+                </div>
+            {% endif %}
+            
+            <fieldset class="module aligned">
+                <div class="form-row">
+                    {{ form.strategy.label_tag }}
+                    {{ form.strategy }}
+                    {% if form.strategy.help_text %}
+                        <div class="help">{{ form.strategy.help_text }}</div>
+                    {% endif %}
+                    {% if form.strategy.errors %}
+                        <div class="errors">{{ form.strategy.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ form.exchange.label_tag }}
+                    {{ form.exchange }}
+                    {% if form.exchange.help_text %}
+                        <div class="help">{{ form.exchange.help_text }}</div>
+                    {% endif %}
+                    {% if form.exchange.errors %}
+                        <div class="errors">{{ form.exchange.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ form.broker.label_tag }}
+                    {{ form.broker }}
+                    {% if form.broker.help_text %}
+                        <div class="help">{{ form.broker.help_text }}</div>
+                    {% endif %}
+                    {% if form.broker.errors %}
+                        <div class="errors">{{ form.broker.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ form.start_date.label_tag }}
+                    {{ form.start_date }}
+                    {% if form.start_date.help_text %}
+                        <div class="help">{{ form.start_date.help_text }}</div>
+                    {% endif %}
+                    {% if form.start_date.errors %}
+                        <div class="errors">{{ form.start_date.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ form.end_date.label_tag }}
+                    {{ form.end_date }}
+                    {% if form.end_date.help_text %}
+                        <div class="help">{{ form.end_date.help_text }}</div>
+                    {% endif %}
+                    {% if form.end_date.errors %}
+                        <div class="errors">{{ form.end_date.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-row">
+                    {{ form.symbols.label_tag }}
+                    {{ form.symbols }}
+                    {% if form.symbols.help_text %}
+                        <div class="help">{{ form.symbols.help_text }}</div>
+                    {% endif %}
+                    {% if form.symbols.errors %}
+                        <div class="errors">{{ form.symbols.errors }}</div>
+                    {% endif %}
+                </div>
+            </fieldset>
+            
+            <div class="submit-row">
+                <input type="submit" value="🚀 Execute Backtest" class="default" />
+                <a href="{% url 'admin:backtesting_backtestingstrategy_changelist' %}" class="cancel-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+    
+    <div class="module instructions">
+        <h2>📋 Instructions</h2>
+        <ul>
+            <li><strong>Strategy:</strong> Select the trading strategy to execute (mean-reverting, ma-crossover, cointegration)</li>
+            <li><strong>Exchange:</strong> Optional - Filter symbols by specific exchange (NYSE, NASDAQ, CRYPTO USDT, etc.)</li>
+            <li><strong>Broker:</strong> Optional - Filter symbols by specific broker</li>
+            <li><strong>Start/End Date:</strong> Date range for the backtest (default: 2013-01-01 to today)</li>
+            <li><strong>Specific Symbols:</strong> Optional - Comma-separated list of symbols to test (e.g., AAPL,MSFT,GOOGL)</li>
+        </ul>
+        
+        <h3>📊 Available Strategies:</h3>
+        <ul>
+            <li><strong>Mean Reverting:</strong> Identifies overbought/oversold conditions and trades mean reversion</li>
+            <li><strong>MA Crossover:</strong> Uses moving average crossovers to generate buy/sell signals</li>
+            <li><strong>Cointegration:</strong> Pairs trading based on cointegrated relationships</li>
+        </ul>
+        
+        <h3>💡 Examples:</h3>
+        <ul>
+            <li><strong>NYSE Mean Reverting:</strong> Strategy: Mean Reverting, Exchange: NYSE</li>
+            <li><strong>NASDAQ MA Crossover:</strong> Strategy: MA Crossover, Exchange: NASDAQ</li>
+            <li><strong>Crypto Cointegration:</strong> Strategy: Cointegration, Exchange: CRYPTO USDT</li>
+            <li><strong>Specific Symbols:</strong> Strategy: Mean Reverting, Symbols: AAPL,MSFT,GOOGL</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -9,10 +9,11 @@ from strategies.strategy_logic import MeanRevertingStrategy,CoIntegrationStrateg
 from strategies.models import StrategySymbol,CorrelatedPair
 from collections import defaultdict
 from backtesting.utils import BackTestUtils
+from portfolio.portfolio_logic import analyze_and_enable_strategies
 # Setup logging
 logger = logging.getLogger(__name__)
 
-def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list=None,backtest=None,exchange_name=None,reverse=False,correlated_pair_list=None):
+def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list=None, backtest=None, exchange_name=None, reverse=False, correlated_pair_list=None, exchange_id=None):
     """
     Executes a backtest for the given strategy.
 
@@ -21,17 +22,30 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
     :param end_date: The end date for historical data (defaults to today).
     :param symbol_list: (Optional) List of specific symbols to backtest.
                         If None, the backtest runs on all symbols.
+    :param exchange_name: (Optional) Name of the exchange to filter symbols.
+    :param exchange_id: (Optional) ID of the exchange to filter symbols.
+    :param backtest: (Optional) Existing backtest instance to use.
+    :param reverse: (Optional) Reverse the order of correlated pairs.
+    :param correlated_pair_list: (Optional) List of specific correlated pairs to backtest.
     """
     try:
         # Fetch the strategy
         strategy = Strategy.objects.get(slug=strategy_id)
         logger.info(f"Starting backtest for strategy: {strategy.name}")
-
+        print(exchange_name)
+        # Get exchange if specified
+        exchange = None
+        if exchange_id:
+            exchange = Exchange.objects.get(id=exchange_id)
+        elif exchange_name:
+            exchange = Exchange.objects.get(name=exchange_name)
+        
         if not backtest:
-        # Create a new backtest entry
+            # Create a new backtest entry
             backtest = BackTestingStrategy.objects.create(
                 strategy=strategy,
-                parameters=strategy.parameters
+                parameters=strategy.parameters,
+                exchange=exchange
             )
 
         if strategy.slug == "mean-reverting":
@@ -41,6 +55,15 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
                 symbols = Symbols.objects.filter(ticker__in=symbol_list)
             else:
                 symbols = Symbols.objects.all()
+            
+            # Filter by exchange if specified
+            if exchange:
+                symbols = symbols.filter(exchange=exchange)
+                logger.info(f"Filtering symbols for exchange: {exchange.name}")
+            
+            # Filter symbols that have brokers assigned
+            symbols = symbols.filter(broker__isnull=False)
+            logger.info(f"Filtering symbols with brokers assigned")
 
             if not symbols.exists():
                 logger.warning("No symbols found for backtesting.")
@@ -62,6 +85,15 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
                 symbols = Symbols.objects.filter(ticker__in=symbol_list)
             else:
                 symbols = Symbols.objects.all()
+            
+            # Filter by exchange if specified
+            if exchange:
+                symbols = symbols.filter(exchange=exchange)
+                logger.info(f"Filtering symbols for exchange: {exchange.name}")
+            
+            # Filter symbols that have brokers assigned
+            symbols = symbols.filter(broker__isnull=False)
+            logger.info(f"Filtering symbols with brokers assigned")
 
             if not symbols.exists():
                 logger.warning("No symbols found for backtesting.")
@@ -78,7 +110,7 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
 
         elif strategy.slug == "cointegration":  
             if exchange_name:
-                exchange = Exchange.objects.get(name=exchange_name)
+                #exchange = Exchange.objects.get(name=exchange_name)
                 correlated_pairs = CorrelatedPair.objects.filter(exchange=exchange)  # You can filter based on certain criteria here if needed
             elif correlated_pair_list:
               
@@ -86,7 +118,7 @@ def execute_backtest(strategy_id, start_date, end_date=date.today(), symbol_list
                 correlated_pairs = correlated_pair_list                                     
             else:    
                 correlated_pairs = CorrelatedPair.objects.all()  # You can filter based on certain criteria here if needed
-
+            print(correlated_pairs)
             if not correlated_pairs.exists():
                 logger.warning("No correlated pairs found for Cointegration strategy.")
                 return "No correlated pairs available for backtesting."                                     
@@ -299,11 +331,17 @@ def calculate_strategy_statistics(backtest):
     """
 
     if(backtest.strategy.slug=='cointegration'):
+
+
+        analyze_and_enable_strategies(backtest)
         strategy_symbols = StrategySymbol.objects.filter(
             strategy=backtest.strategy,
             correlated_pair__isnull=False
         ).select_related('symbol', 'correlated_pair')
-
+        
+       
+        
+        
         symbol_map = {
             (ss.symbol_id, ss.correlated_pair_id): ss
             for ss in strategy_symbols
@@ -419,6 +457,23 @@ def calculate_strategy_statistics(backtest):
 
             logger.info(f"✅ Strategy stats saved for {action}")
     else:
+        # Check if there are any active strategy symbols for mean-reverting strategy
+        analyze_and_enable_strategies(backtest)
+        active_long_symbols = StrategySymbol.objects.filter(
+            strategy=backtest.strategy, 
+            is_active_long=True
+        ).count()
+        
+        active_short_symbols = StrategySymbol.objects.filter(
+            strategy=backtest.strategy, 
+            is_active_short=True
+        ).count()
+        
+        # If no active symbols found, try to analyze and enable strategies
+        if active_long_symbols == 0 and active_short_symbols == 0:
+            logger.info(f"No active strategy symbols found for {backtest.strategy.name}. Running analyze_and_enable_strategies...")
+            analyze_and_enable_strategies(backtest)
+        
         for action in ["LONG", "SHORT"]:
             # Get symbols where strategy is active for this action
             if action == "LONG":
@@ -471,3 +526,73 @@ def calculate_strategy_statistics(backtest):
             )
 
             logger.info(f"Strategy statistics calculated for {backtest.strategy.name} - {action}, considering only active symbols.")
+
+
+def calculate_strategy_statistics_by_id(backtest_id):
+    """
+    Calculate strategy statistics by backtest ID
+    
+    Args:
+        backtest_id: The ID of the backtest to calculate statistics for
+        
+    Returns:
+        dict: Result with success status and message
+    """
+    try:
+        # Get the backtest object by ID
+        backtest = BackTestingStrategy.objects.get(id=backtest_id)
+        logger.info(f"Found backtest: {backtest.strategy.name} (ID: {backtest_id})")
+        
+        # Check if there are any trades for this backtest
+        trade_count = TradeHistory.objects.filter(backtest=backtest).count()
+        logger.info(f"Found {trade_count} trades for backtest ID {backtest_id}")
+        
+        if trade_count == 0:
+            return {
+                'success': False,
+                'error': 'No trades found',
+                'message': f'No trades found for backtest ID {backtest_id}. Cannot calculate statistics without trade data.'
+            }
+        
+        # Call the original function
+        try:
+            calculate_strategy_statistics(backtest)
+            logger.info(f"Successfully calculated strategy statistics for backtest ID: {backtest_id}")
+            
+            # Verify that statistics were created
+            stats_count = StrategyStatistics.objects.filter(backtest=backtest).count()
+            logger.info(f"Created {stats_count} strategy statistics records")
+            
+            return {
+                'success': True,
+                'message': f'Strategy statistics calculated successfully for backtest ID: {backtest_id} ({stats_count} records created)',
+                'backtest_name': f"{backtest.strategy.name} - {backtest.name or 'Unnamed'}",
+                'stats_count': stats_count
+            }
+            
+        except Exception as calc_error:
+            logger.error(f"Error in calculate_strategy_statistics: {str(calc_error)}")
+            return {
+                'success': False,
+                'error': str(calc_error),
+                'message': f'Error calculating strategy statistics: {str(calc_error)}'
+            }
+        
+    except BackTestingStrategy.DoesNotExist:
+        error_msg = f"Backtest with ID {backtest_id} not found"
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg,
+            'message': error_msg
+        }
+    except Exception as e:
+        error_msg = f"Error calculating strategy statistics for backtest ID {backtest_id}: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': str(e),
+            'message': error_msg
+        }

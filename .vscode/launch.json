@@ -1,0 +1,59 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Django Debug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "runserver",
+                "127.0.0.1:8000"
+            ],
+            "django": true,
+            "justMyCode": false,
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+            }
+        },
+        {
+            "name": "Django Shell Debug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "shell"
+            ],
+            "django": true,
+            "justMyCode": false,
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+            }
+        },
+        {
+            "name": "Debug Backtest Script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug_example.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+            }
+        },
+        {
+            "name": "Debug Management Command",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "test_calculation_66"
+            ],
+            "django": true,
+            "justMyCode": false,
+            "env": {
+                "DJANGO_SETTINGS_MODULE": "trading_system.settings"
+            }
+        }
+    ]
+}

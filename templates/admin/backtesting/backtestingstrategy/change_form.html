@@ -1,0 +1,51 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    {% if original %}
+        <li>
+            <a href="{% url 'admin:backtesting_backtestingstrategy_calculate_stats' original.id %}" 
+               class="button" 
+               style="background: #28a745; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
+                📊 Calculate Strategy Statistics
+            </a>
+        </li>
+    {% endif %}
+{% endblock %}
+
+{% block field_sets %}
+    {{ block.super }}
+    {% if original %}
+        <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px;">
+            <h3 style="margin-top: 0; color: #495057;">Quick Actions</h3>
+            <p style="margin-bottom: 10px; color: #6c757d;">
+                <strong>Backtest ID:</strong> {{ original.id }} | 
+                <strong>Strategy:</strong> {{ original.strategy.name }} | 
+                <strong>Created:</strong> {{ original.created_at|date:"Y-m-d H:i" }}
+            </p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="{% url 'admin:backtesting_backtestingstrategy_calculate_stats' original.id %}" 
+                   class="button" 
+                   style="background: #28a745; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; border: none; cursor: pointer;">
+                    📊 Calculate Strategy Statistics
+                </a>
+                <a href="{% url 'admin:backtesting_tradehistory_changelist' %}?backtest__id__exact={{ original.id }}" 
+                   class="button" 
+                   style="background: #007bff; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; border: none; cursor: pointer;">
+                    📈 View Trade History
+                </a>
+                <a href="{% url 'admin:backtesting_strategystatistics_changelist' %}?backtest__id__exact={{ original.id }}" 
+                   class="button" 
+                   style="background: #6f42c1; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; border: none; cursor: pointer;">
+                    📊 View Strategy Statistics
+                </a>
+                <a href="{% url 'admin:backtesting_symbolstatistics_changelist' %}?backtest__id__exact={{ original.id }}" 
+                   class="button" 
+                   style="background: #fd7e14; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; border: none; cursor: pointer;">
+                    📋 View Symbol Statistics
+                </a>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

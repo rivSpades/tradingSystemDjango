@@ -85,6 +85,8 @@ class ExecutionUtils:
     @staticmethod
     def create_order(symbol,quantity,action,t_id=None):
         broker=symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         response = utils.create_order(symbol.ticker, quantity, action)
         print(response)
@@ -92,6 +94,8 @@ class ExecutionUtils:
     @staticmethod
     def create_order_pair(symbol_1,symbol_2,quantity_1,quantity_2,action,t_id=None):
         broker=symbol_1.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol_1.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         utils.create_order_pair(symbol_1.ticker,symbol_2.ticker, quantity_1,quantity_2, action)
         
@@ -101,6 +105,8 @@ class ExecutionUtils:
     @staticmethod
     def close_position(symbol):
         broker=symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         response=utils.close_position(symbol.ticker)        
         print(response)
@@ -108,6 +114,8 @@ class ExecutionUtils:
     @staticmethod
     def account_info(symbol):
         broker = symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         response = utils.get_account_info()
         return response
@@ -115,6 +123,8 @@ class ExecutionUtils:
     @staticmethod
     def account_bankroll(symbol):
         broker = symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         account_info = utils.get_account_info()
         bankroll = float(account_info["equity"])
@@ -123,6 +133,8 @@ class ExecutionUtils:
     @staticmethod
     def get_last_minute_bar(symbol):
         broker = symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         df = utils.last_minute_bar(symbol.ticker)
         return df
@@ -130,6 +142,8 @@ class ExecutionUtils:
     @staticmethod
     def get_daily_price(symbol, start_date, end_date=None):
         broker = symbol.broker
+        if not broker:
+            raise ValueError(f"No broker assigned to symbol {symbol.ticker}")
         utils = BrokerUtils(broker.name, broker.api_key, broker.secret_key)
         df = utils.get_daily_price(symbol,start_date,end_date)
         return df    

@@ -1,0 +1,5 @@
+---
+description: use conda activate tradingSystem for env
+globs:
+alwaysApply: true
+---

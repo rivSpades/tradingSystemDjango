@@ -1,7 +1,6 @@
 import logging
 from backtesting.models import SymbolStatistics
 from strategies.models import StrategySymbol
-from backtesting.backtest_logic import calculate_strategy_statistics
 logger = logging.getLogger(__name__)
 
 def analyze_and_enable_strategies(backtest):
@@ -135,7 +134,7 @@ def analyze_and_enable_strategies(backtest):
     else:
 
         symbols = SymbolStatistics.objects.filter(backtest=backtest)
-
+        
         for symbol_stat in symbols:
             # Extract values
             action = symbol_stat.action
@@ -151,7 +150,7 @@ def analyze_and_enable_strategies(backtest):
             # Apply Filters
             is_eligible = (
                 5 <= avg_roi_per_trade < 1000 and
-                avg_holding_period < 70 and
+                avg_holding_period < 90 and
                 total_trades >= 3 and
                 win_rate >= 80 and
                 total_profit_loss > 0
@@ -173,5 +172,4 @@ def analyze_and_enable_strategies(backtest):
             status = "Enabled" if is_eligible else "Disabled"
             logger.info(f"{symbol.ticker} ({strategy.name}) {action} -> {status}")
 
-    calculate_strategy_statistics(backtest)
     logger.info(f"Portfolio analysis completed for backtest: {backtest}")

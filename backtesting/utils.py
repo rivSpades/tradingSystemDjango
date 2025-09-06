@@ -54,6 +54,7 @@ class BackTestUtils:
                                 backtest=backtest,
                                 correlated_pair=pair,
                                 strategy=backtest.strategy,
+                                exchange=backtest.exchange,
                                 action=action,  # Separate LONG and SHORT
                                 defaults={
                                     'total_trades': total_trades,
@@ -119,6 +120,7 @@ class BackTestUtils:
                         backtest=backtest,
                         correlated_pair=pair,
                         strategy=backtest.strategy,
+                        exchange=backtest.exchange,
                         action="PAIR_TRADING",
                         defaults={
                             'total_trades': total_trades,
@@ -162,6 +164,7 @@ class BackTestUtils:
                         symbol_id=symbol,
                         backtest=backtest,
                         strategy=backtest.strategy,
+                        exchange=backtest.exchange,
                         action=action,  # Separate LONG and SHORT
                         defaults={
                             'total_trades': total_trades,
